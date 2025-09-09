@@ -272,6 +272,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         grammar = str(current_record.get('文法', '')) if pd.notna(current_record.get('文法')) else ""
         meaning = str(current_record.get('含义', '')) if has_meaning_col and pd.notna(current_record.get('含义')) else ""
         remarks = str(current_record.get('备注', '')) if has_remarks_col and pd.notna(current_record.get('备注')) else ""
+        
 
         if not word and not grammar:
             i += 1
