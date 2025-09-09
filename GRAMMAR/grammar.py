@@ -279,12 +279,12 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         
         display_term(word, grammar)
 
-        prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
+        prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit" 
         if last_answered_correctly_index is not None:
             prompt += " / x: Correct Last)"
         else:
             prompt += ")"
-        print(prompt)
+        print(prompt + " " + str(i) + "/" + str(len(records)))
         
         event = keyboard.read_event(suppress=True)
         while event.event_type != keyboard.KEY_DOWN:
