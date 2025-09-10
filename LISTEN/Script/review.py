@@ -371,7 +371,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             for sheet_name, sheet_data in all_sheets_data.items():
-                sheet_data.to_excel(writer, sheet_name=sheet_name, index=True)
+                sheet_data.to_excel(writer, sheet_name=sheet_name, index=False)
                 
                 if sheet_name in col_widths:
                     ws = writer.sheets[sheet_name]
