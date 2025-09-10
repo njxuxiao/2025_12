@@ -375,7 +375,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         elif key == 'right':
             display_details(meaning, display_remarks)
             speak()
-            print("Great!")
+            print(f"Great! Forgotten count: {current_record['Fre']}")
             last_answered_correctly_index = original_index
 
         i += 1
