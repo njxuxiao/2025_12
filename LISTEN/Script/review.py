@@ -12,6 +12,14 @@ except ImportError:
     print("Please run in your terminal or command line: pip install keyboard")
     sys.exit()
 
+# New library for Japanese character conversion
+try:
+    import pykakasi
+except ImportError:
+    print("Error: 'pykakasi' library is missing.")
+    print("Please run in your terminal or command line: pip install pykakasi")
+    sys.exit()
+
 try:
     from gtts import gTTS
     from playsound import playsound
@@ -165,6 +173,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     japanese_voice_id = get_pyttsx3_japanese_voice_id()
     auto_mode_current_engine = 'gTTS' if gtts_available else 'pyttsx3'
 
+    # Initialize pykakasi
+    kks = pykakasi.kakasi()
+
     all_sheets_data = {}
     chosen_sheet = None
     try:
@@ -224,6 +235,8 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         all_sheets_data = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
         df = all_sheets_data[chosen_sheet]
 
+        df.columns = df.columns.str.strip()
+
     except Exception as e:
         print(f"Error reading or selecting worksheet: {e}")
         return
@@ -238,8 +251,11 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         print(f"Error: Worksheet '{chosen_sheet}' must contain at least a '单词' or '文法' column.")
         return
         
+    has_reading_col = '读音' in df.columns
     has_meaning_col = '含义' in df.columns
     has_remarks_col = '备注' in df.columns
+    if not has_reading_col:
+        print("Info: No '读音' (Reading) column in your Excel. Readings will be auto-generated.")
     if not has_meaning_col:
         print("Info: No '含义' (Meaning) column in your Excel, definitions will not be shown.")
     if not has_remarks_col:
@@ -270,9 +286,21 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
         word = str(current_record.get('单词', '')) if pd.notna(current_record.get('单词')) else ""
         grammar = str(current_record.get('文法', '')) if pd.notna(current_record.get('文法')) else ""
+        
+        # New logic to get reading
+        reading = ""
+        if show_jiaming:
+            if has_reading_col and pd.notna(current_record.get('读音')):
+                reading = str(current_record.get('读音'))
+            elif word: # If no reading provided, generate it
+                try:
+                    result = kks.convert(word)
+                    reading = "".join([item['hira'] for item in result])
+                except Exception as e:
+                    print(f"!! Could not convert '{word}' to hiragana: {e}")
+
         meaning = str(current_record.get('含义', '')) if has_meaning_col and pd.notna(current_record.get('含义')) else ""
         remarks = str(current_record.get('备注', '')) if has_remarks_col and pd.notna(current_record.get('备注')) else ""
-        
 
         if not word and not grammar:
             i += 1
@@ -285,9 +313,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             prompt += " / x: Correct Last)"
         else:
             prompt += ")"
-
-        print(prompt + " " + str(i+1) + "/" + str(len(records)))
-
+        print(prompt)
         
         event = keyboard.read_event(suppress=True)
         while event.event_type != keyboard.KEY_DOWN:
@@ -314,6 +340,8 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
         last_answered_correctly_index = None
         text_to_speak = word if word else grammar
+        
+        display_remarks = remarks if remarks else reading
 
         def speak():
             if tts_mode == 'online':
@@ -341,15 +369,13 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             current_record['Fre'] += 1
             is_changed = True
             print(f"Recorded! Forgotten count: {current_record['Fre']}")
-            display_details(meaning, remarks)
+            display_details(meaning, display_remarks)
             speak()
 
         elif key == 'right':
-            display_details(meaning, remarks)
+            display_details(meaning, display_remarks)
             speak()
-
-            print(f"Great! Forgotten count: {current_record['Fre']}")
-
+            print("Great!")
             last_answered_correctly_index = original_index
 
         i += 1
@@ -362,7 +388,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         
     try:
         print("Updating records back to DataFrame...")
-        new_df = pd.DataFrame(records, index=original_indices)
+        new_df = pd.DataFrame(records) 
         all_sheets_data[chosen_sheet] = new_df
 
         print("Saving file and preserving column widths...")
@@ -395,7 +421,9 @@ if __name__ == '__main__':
     
     study_sheet = 0
 
-    preferred_tts_engine = 'auto' 
+    preferred_tts_engine = 'offline' 
+
+    show_jiaming = False
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
 
