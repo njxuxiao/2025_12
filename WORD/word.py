@@ -284,7 +284,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             prompt += " / x: Correct Last)"
         else:
             prompt += ")"
-        print(prompt + " " + str(i) + "/" + str(len(records)))
+        print(prompt + " " + str(i+1) + "/" + str(len(records)))
         
         event = keyboard.read_event(suppress=True)
         while event.event_type != keyboard.KEY_DOWN:
