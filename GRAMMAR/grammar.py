@@ -284,7 +284,8 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             prompt += " / x: Correct Last)"
         else:
             prompt += ")"
-        print(prompt + " " + str(i) + "/" + str(len(records)))
+
+        print(prompt + " " + str(i+1) + "/" + str(len(records)))
         
         event = keyboard.read_event(suppress=True)
         while event.event_type != keyboard.KEY_DOWN:
@@ -344,7 +345,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         elif key == 'right':
             display_details(meaning, remarks)
             speak()
-            print("Great! Forgotten count: {current_record['Fre']}")
+
+            print(f"Great! Forgotten count: {current_record['Fre']}")
+  
             last_answered_correctly_index = original_index
 
         i += 1
@@ -370,7 +373,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
             for sheet_name, sheet_data in all_sheets_data.items():
-                sheet_data.to_excel(writer, sheet_name=sheet_name, index=True)
+
+                sheet_data.to_excel(writer, sheet_name=sheet_name, index=False)
+
                 
                 if sheet_name in col_widths:
                     ws = writer.sheets[sheet_name]
