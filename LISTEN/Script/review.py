@@ -285,7 +285,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             prompt += " / x: Correct Last)"
         else:
             prompt += ")"
+
         print(prompt + " " + str(i+1) + "/" + str(len(records)))
+
         
         event = keyboard.read_event(suppress=True)
         while event.event_type != keyboard.KEY_DOWN:
@@ -345,7 +347,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         elif key == 'right':
             display_details(meaning, remarks)
             speak()
+
             print(f"Great! Forgotten count: {current_record['Fre']}")
+
             last_answered_correctly_index = original_index
 
         i += 1
