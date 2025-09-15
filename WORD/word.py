@@ -416,11 +416,11 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 
 if __name__ == '__main__':
-    excel_file_path = './all.xlsx' 
+    excel_file_path = './22_12.xlsx' 
     
     study_sheet = 0
 
-    preferred_tts_engine = 'offline' 
+    preferred_tts_engine = 'auto' 
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
 
