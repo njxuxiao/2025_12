@@ -416,7 +416,10 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 
 if __name__ == '__main__':
-    excel_file_path = './21_7.xlsx' 
+    
+    excel_list = ["1_21_07.xlsx", "2_22_12.xlsx"]
+
+    excel_file_path = excel_list[0]
     
     study_sheet = 0
 
