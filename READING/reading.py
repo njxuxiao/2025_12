@@ -416,7 +416,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 
 if __name__ == '__main__':
-<<<<<<< HEAD
+
 
 
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
@@ -426,9 +426,7 @@ if __name__ == '__main__':
 
     excel_file_path = excel_list[0]
 
-=======
-    excel_file_path = './22_12.xlsx' 
->>>>>>> 117af36 (recite reading 21_7 & 22_12)
+
     
     study_sheet = 0
 
