@@ -419,15 +419,14 @@ if __name__ == '__main__':
 
 
 
+
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
-                  "3_22_07", "4_21_12",
-                  "5_20,12", "6_19_12",
-                  "7_19_07"]
+                  "3_22_07.xlsx", "4_21_12.xlsx",
+                  "5_20_12.xlsx", "6_19_12.xlsx",
+                  "7_19_07.xlsx"]
 
-    excel_file_path = excel_list[0]
+    excel_file_path = excel_list[6]
 
-
-    
     study_sheet = 0
 
     preferred_tts_engine = 'auto' 
