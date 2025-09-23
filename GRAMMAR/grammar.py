@@ -4,6 +4,7 @@ import sys
 from openpyxl import load_workbook
 import tempfile
 import time
+from zipfile import BadZipFile
 
 try:
     import keyboard
@@ -12,7 +13,6 @@ except ImportError:
     print("Please run in your terminal or command line: pip install keyboard")
     sys.exit()
 
-# New library for Japanese character conversion
 try:
     import pykakasi
 except ImportError:
@@ -173,7 +173,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     japanese_voice_id = get_pyttsx3_japanese_voice_id()
     auto_mode_current_engine = 'gTTS' if gtts_available else 'pyttsx3'
 
-    # Initialize pykakasi
     kks = pykakasi.kakasi()
 
     all_sheets_data = {}
@@ -237,6 +236,12 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
         df.columns = df.columns.str.strip()
 
+    except BadZipFile:
+        print(f"\nError: The file '{os.path.basename(file_path)}' seems to be corrupted or is not a valid .xlsx file.")
+        print("This usually happens if the file was saved incorrectly or is an old .xls file renamed to .xlsx.")
+        print("\n[SOLUTION]: Please open the file in Microsoft Excel, go to 'File' -> 'Info' -> and click the 'Convert' button. Then save the file.")
+        print("If you don't see a 'Convert' button, using 'File' -> 'Save As' and choosing 'Excel Workbook (*.xlsx)' will also fix it.")
+        return
     except Exception as e:
         print(f"Error reading or selecting worksheet: {e}")
         return
@@ -280,6 +285,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     original_indices = df.index.tolist()
 
     i = 0
+    enter_press_count = 0
     while i < len(records):
         current_record = records[i]
         original_index = original_indices[i]
@@ -287,11 +293,10 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         word = str(current_record.get('单词', '')) if pd.notna(current_record.get('单词')) else ""
         grammar = str(current_record.get('文法', '')) if pd.notna(current_record.get('文法')) else ""
         
-        # New logic to get reading
         reading = ""
         if has_reading_col and pd.notna(current_record.get('读音')):
             reading = str(current_record.get('读音'))
-        elif word: # If no reading provided, generate it
+        elif word:
             try:
                 result = kks.convert(word)
                 reading = "".join([item['hira'] for item in result])
@@ -307,18 +312,31 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         
         display_term(word, grammar)
 
-        prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
-        if last_answered_correctly_index is not None:
-            prompt += " / x: Correct Last)"
-        else:
-            prompt += ")"
-        print(prompt + " " + str(i+1) + "/" + str(len(records)))
-        
-        event = keyboard.read_event(suppress=True)
-        while event.event_type != keyboard.KEY_DOWN:
+        key = None
+        while True:
+            prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
+            if last_answered_correctly_index is not None:
+                prompt += " / x: Correct Last"
+            prompt += " / Enter: New Line)"
+            print(prompt + " " + str(i+1) + "/" + str(len(records)))
+            
             event = keyboard.read_event(suppress=True)
-        
-        key = event.name.lower()
+            while event.event_type != keyboard.KEY_DOWN:
+                event = keyboard.read_event(suppress=True)
+            
+            key = event.name.lower()
+
+            if key == 'enter':
+                enter_press_count += 1
+                if enter_press_count > 3:
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                else:
+                    print("\n" * 2)
+                    display_term(word, grammar)
+                continue
+            
+            enter_press_count = 0
+            break
         
         if key == 'q':
             print("Saving progress and exiting...")
@@ -418,9 +436,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 if __name__ == '__main__':
     
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
-                  "3_22_07", "4_21_12",
-                  "5_20,12", "6_19_12",
-                  "7_19_07"]
+                  "3_22_07.xlsx", "4_21_12.xlsx",
+                  "5_20_12.xlsx", "6_19_12.xlsx",
+                  "7_19_07.xlsx"]
 
     excel_file_path = excel_list[0]
     
