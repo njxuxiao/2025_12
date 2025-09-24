@@ -265,9 +265,13 @@ def study_helper(file_path, tts_mode='auto'):
             key = event.name.lower()
 
             if key == 'enter':
-                
-                os.system('cls' if os.name == 'nt' else 'clear')
-                is_cleared = True
+                enter_press_count += 1
+                if enter_press_count > 3:
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    is_cleared = True
+                else:
+                    print("\n" * 2)
+                    is_cleared = False
                 continue
             
             break
