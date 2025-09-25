@@ -222,7 +222,7 @@ def study_helper(file_path, tts_mode='auto'):
     records = df.to_dict('records')
     
     i = 0
-    enter_press_count = 0
+
     while i < len(records):
         current_record = records[i]
 
@@ -255,7 +255,7 @@ def study_helper(file_path, tts_mode='auto'):
             prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
             if last_answered_correctly_index is not None:
                 prompt += " / x: Correct Last"
-            prompt += " / Enter: New Line)"
+            prompt += " / Enter: Clean)"
             print(prompt + " " + str(i+1) + "/" + str(len(records)))
             
             event = keyboard.read_event(suppress=True)
@@ -265,16 +265,11 @@ def study_helper(file_path, tts_mode='auto'):
             key = event.name.lower()
 
             if key == 'enter':
-                enter_press_count += 1
-                if enter_press_count > 3:
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    is_cleared = True
-                else:
-                    print("\n" * 2)
-                    is_cleared = False
+                
+                os.system('cls' if os.name == 'nt' else 'clear')
+                is_cleared = True
                 continue
             
-            enter_press_count = 0
             break
         
         if key == 'q':
