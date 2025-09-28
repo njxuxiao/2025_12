@@ -202,6 +202,6 @@ if __name__ == '__main__':
     sentence_listening_practice(
         filepath=audio_file, 
         repeat_times=5,
-        whisper_model="base"
+        whisper_model="large"
     )
 
