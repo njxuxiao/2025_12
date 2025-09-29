@@ -55,7 +55,7 @@ if __name__ == '__main__':
     # 1. Place this script in the same folder as your Excel files.
     # 2. Add the names of all the Excel files you want to convert into the list below.
     files_to_convert = [
-        "./21_7/21_7.xlsx"
+        "./22_12/22_12.xlsx"
     ]
 
     print("Starting batch conversion from Excel (.xlsx) to Text (.txt)...")
