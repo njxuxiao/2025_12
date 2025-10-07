@@ -135,7 +135,6 @@ def speak_with_gtts(text):
 def speak_with_pyttsx3(voice_id, text):
     if voice_id and text:
         try:
-            # Forcing stop for any lingering pygame sounds when switching to offline
             if gtts_available:
                 pygame.mixer.stop()
             engine = pyttsx3.init()
@@ -196,7 +195,7 @@ def display_details(meaning, remarks):
     print("╰" + "┈"*50 + "╯")
 
 
-def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
+def study_helper(file_path, sheet_to_study=None, tts_mode='auto', speak_timing='immediate'):
     if gtts_available:
         pygame.init()
         pygame.mixer.init()
@@ -367,8 +366,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         speak_with_pyttsx3(japanese_voice_id, text_to_speak)
                 elif auto_mode_current_engine == 'pyttsx3':
                     speak_with_pyttsx3(japanese_voice_id, text_to_speak)
-
-            speak()
+            
+            if speak_timing == 'immediate':
+                speak()
 
             key = None
             while True:
@@ -421,11 +421,15 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
                 display_details(meaning, display_remarks)
+                if speak_timing == 'after_answer':
+                    speak()
                 time.sleep(2)
 
             elif key == 'right':
                 display_details(meaning, display_remarks)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
+                if speak_timing == 'after_answer':
+                    speak()
                 last_answered_correctly_index = original_index
 
             i += 1
@@ -471,12 +475,14 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 if __name__ == '__main__':
     
-
-    excel_file_path = "./21_7/21_7.xlsx"
+    excel_file_path = "./22_12/22_12.xlsx"
     
     study_sheet = 0
 
-    preferred_tts_engine = 'offline' 
+    preferred_tts_engine = 'auto' 
 
-    study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+    speaking_types = ["immediate", "after_answer"]
+    speak_timing_mode = speaking_types[1]
+
+    study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine, speak_timing=speak_timing_mode)
 
