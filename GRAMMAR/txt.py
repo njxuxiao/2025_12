@@ -36,7 +36,7 @@ def convert_excel_to_txt(excel_filepath):
             
             # Clean up column names just in case
             df.columns = df.columns.str.strip()
-
+            
             # Define the output txt filename
             output_filename = f"{base_filename}_{sheet_name}.txt"
             
