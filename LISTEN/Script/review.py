@@ -89,21 +89,22 @@ def speak_with_gtts(text):
         os.environ['HTTP_PROXY'] = proxy_address
         os.environ['HTTPS_PROXY'] = proxy_address
         if not _gtts_connection_info_printed:
-            print(f"  -> Temporarily set system proxy for gTTS: {proxy_address}")
+            print(f"Temporarily set system proxy for gTTS: {proxy_address}")
 
         audio_buffer = io.BytesIO()
 
         for tld in tld_list:
             try:
                 if not _gtts_connection_info_printed:
-                    print(f"  -> Trying Google TTS server via tld='{tld}'...")
+                    # print(f"  -> Trying Google TTS server via tld='{tld}'...")
+                    print("")
                 
                 tts = gTTS(text=text, lang='ja', tld=tld)
                 tts.write_to_fp(audio_buffer)
                 success = True
                 
                 if not _gtts_connection_info_printed:
-                    print(f"     Success! Connected via '{tld}'. Subsequent messages will be silenced.")
+                    # print(f"     Success! Connected via '{tld}'. Subsequent messages will be silenced.")
                     _gtts_connection_info_printed = True
                     _gtts_successful_tld = tld
                 break 
@@ -443,6 +444,11 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', speak_timing='
         try:
             print("Updating records back to DataFrame...")
             new_df = pd.DataFrame(records) 
+
+            if 'Fre' in new_df.columns:
+                print("Re-sorting by 'Fre' before saving...")
+                new_df.sort_values(by='Fre', ascending=False, inplace=True)
+                
             all_sheets_data[chosen_sheet] = new_df
 
             print("Saving file and preserving column widths...")
