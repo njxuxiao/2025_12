@@ -481,7 +481,7 @@ if __name__ == '__main__':
                   "5_20_12.xlsx", "6_19_12.xlsx",
                   "7_19_07.xlsx"]
 
-    excel_file_path = excel_list[6]
+    excel_file_path = excel_list[3]
     
     study_sheet = 0
 
