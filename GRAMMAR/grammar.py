@@ -479,9 +479,9 @@ if __name__ == '__main__':
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
                   "3_22_07.xlsx", "4_21_12.xlsx",
                   "5_20_12.xlsx", "6_19_12.xlsx",
-                  "7_19_07.xlsx"]
+                  "7_19_07.xlsx","blue_1.xlsx","blue_2.xlsx"]
 
-    excel_file_path = excel_list[0]
+    excel_file_path = excel_list[8]
     
     study_sheet = 0
 
