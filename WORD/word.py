@@ -483,7 +483,8 @@ if __name__ == '__main__':
     
 
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
-                  "3_22_07.xlsx"]
+                  "3_22_07.xlsx",
+                  "all.xlsx"]
                         
     excel_file_path = excel_list[2]
     
