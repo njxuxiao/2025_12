@@ -444,7 +444,7 @@ if __name__ == '__main__':
     
     study_sheet = 0
 
-    preferred_tts_engine = 'offline' 
+    preferred_tts_engine = 'auto' 
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
 
