@@ -406,6 +406,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     try:
         print("Updating records back to DataFrame...")
         new_df = pd.DataFrame(records) 
+        if 'Fre' in new_df.columns:
+            print("Re-sorting by 'Fre' before saving...")
+            new_df.sort_values(by='Fre', ascending=False, inplace=True)        
         all_sheets_data[chosen_sheet] = new_df
 
         print("Saving file and preserving column widths...")
