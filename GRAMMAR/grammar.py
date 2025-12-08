@@ -7,6 +7,10 @@ import requests
 import urllib.request
 import io
 
+# 移除 openpyxl 相关导入，因为 txt 不需要
+# from openpyxl import load_workbook 
+# from zipfile import BadZipFile
+
 try:
     import keyboard
 except ImportError:
@@ -194,6 +198,7 @@ def display_details(meaning, remarks):
     print("╰" + "┈"*50 + "╯")
 
 
+# sheet_to_study 参数保留但会被忽略，因为 txt 没有 sheet
 def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     if gtts_available:
         pygame.init()
@@ -213,9 +218,13 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             if not file_path.endswith('.txt'):
                 print(f"Warning: The file '{file_path}' does not end with .txt, but trying to read it anyway.")
             
+            # 读取 txt 文件
+            # sep='\t' 假设您的 txt 是从 Excel 另存为“文本文件(制表符分隔)”导出的
+            # 如果您的文件是逗号分隔，请将 sep='\t' 改为 sep=','
             print(f"Reading file: {file_path}")
             df = pd.read_csv(file_path, sep='\t', encoding='utf-8')
             
+            # 清理列名空格
             df.columns = df.columns.str.strip()
 
         except Exception as e:
@@ -259,6 +268,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         is_changed = False
         last_answered_correctly_index = None
         records = df.to_dict('records')
+        # 对于 txt 读取，reset_index 并不像 excel 多 sheet 那样复杂，但逻辑保持一致
         original_indices = df.index.tolist()
 
         i = 0
@@ -400,6 +410,8 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 print("Re-sorting by 'Fre' before saving...")
                 new_df.sort_values(by='Fre', ascending=False, inplace=True)
             
+            # 保存为 txt (制表符分隔)
+            # index=False 不保存行号
             new_df.to_csv(file_path, sep='\t', index=False, encoding='utf-8')
             
             print("\nStudy session finished! Your progress has been saved successfully to the txt file.")
@@ -415,26 +427,20 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 if __name__ == '__main__':
     
-
+    # 这里的列表现在指向 txt 文件
     txt_list = [
-        "1_21_07_Sheet1.txt", 
-        "2_22_12_Sheet1.txt", 
-        "3_22_07_Sheet1.txt", 
-        "4_21_12_Sheet1.txt",
-        "5_20_12_Sheet1.txt", 
-        "6_19_12_Sheet1.txt",
-        "7_19_07_Sheet1.txt"
+        "1_21_07.txt", "2_22_12.txt", 
+        "3_22_07.txt", "4_21_12.txt",
+        "5_20_12.txt", "6_19_12.txt",
+        "7_19_07.txt"
     ]
 
- 
+    # 选择要学习的文件
     txt_file_path = txt_list[4] 
 
-
+    # study_sheet 参数在 txt 模式下会被忽略，设为 None 即可
     study_sheet = None
 
     preferred_tts_engine = 'online' 
 
     study_helper(txt_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
-
-    for i in range(10):
-        print("\n")
