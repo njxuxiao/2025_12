@@ -1,10 +1,8 @@
 import pandas as pd
 import os
 import sys
-from openpyxl import load_workbook
 import tempfile
 import time
-from zipfile import BadZipFile
 import requests
 import urllib.request
 import io
@@ -103,13 +101,13 @@ def speak_with_gtts(text):
                 success = True
                 
                 if not _gtts_connection_info_printed:
-                    print(f"     Success! Connected via '{tld}'. Subsequent messages will be silenced.")
+                    print(f"      Success! Connected via '{tld}'. Subsequent messages will be silenced.")
                     _gtts_connection_info_printed = True
                     _gtts_successful_tld = tld
                 break 
             except Exception as e:
                 if not _gtts_connection_info_printed:
-                    print(f"     Connection to '{tld}' failed: {e}")
+                    print(f"      Connection to '{tld}' failed: {e}")
                 continue
 
         if success:
@@ -207,75 +205,22 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
         kks = pykakasi.kakasi()
 
-        all_sheets_data = {}
-        chosen_sheet = None
         try:
             if not os.path.exists(file_path):
                 print(f"Error: File not found '{file_path}'.")
                 return
 
-            if not file_path.endswith('.xlsx'):
-                print(f"Error: This feature requires an .xlsx format Excel file.")
-                print(f"Please open '{os.path.basename(file_path)}' with Excel and save it as .xlsx format.")
-                return
+            if not file_path.endswith('.txt'):
+                print(f"Warning: The file '{file_path}' does not end with .txt, but trying to read it anyway.")
             
-            xls = pd.ExcelFile(file_path, engine='openpyxl')
-            sheet_names = xls.sheet_names
-
-            if not sheet_names:
-                print("Error: No worksheets found in the Excel file.")
-                return
-
-            if sheet_to_study is not None:
-                if isinstance(sheet_to_study, int):
-                    if 0 <= sheet_to_study < len(sheet_names):
-                        chosen_sheet = sheet_names[sheet_to_study]
-                    else:
-                        print(f"Error: Specified sheet index {sheet_to_study} is invalid. Valid range is 0 to {len(sheet_names)-1}.")
-                        return
-                elif isinstance(sheet_to_study, str):
-                    if sheet_to_study in sheet_names:
-                        chosen_sheet = sheet_to_study
-                    else:
-                        print(f"Error: Cannot find worksheet named '{sheet_to_study}'.")
-                        print(f"Available worksheets are: {sheet_names}")
-                        return
-                else:
-                    print("Error: Invalid type for sheet_to_study parameter. It should be an integer (index) or a string (name).")
-                    return
-                print(f"Selected worksheet as specified: '{chosen_sheet}'")
-            else:
-                if len(sheet_names) == 1:
-                    chosen_sheet = sheet_names[0]
-                    print(f"Automatically selected the only worksheet: '{chosen_sheet}'")
-                else:
-                    print("Multiple worksheets (Sheets) found:")
-                    for i, name in enumerate(sheet_names):
-                        print(f"  {i+1}: {name}")
-                    while True:
-                        try:
-                            choice = int(input(f"Please enter the number of the worksheet you want to study (1-{len(sheet_names)}): "))
-                            if 1 <= choice <= len(sheet_names):
-                                chosen_sheet = sheet_names[choice-1]
-                                break
-                            else:
-                                print("Invalid number, please try again.")
-                        except ValueError:
-                            print("Please enter a number.")
+            print(f"Reading file: {file_path}")
+            df = pd.read_csv(file_path, sep='\t', encoding='utf-8')
             
-            all_sheets_data = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
-            df = all_sheets_data[chosen_sheet]
-
             df.columns = df.columns.str.strip()
 
-        except BadZipFile:
-            print(f"\nError: The file '{os.path.basename(file_path)}' seems to be corrupted or is not a valid .xlsx file.")
-            print("This usually happens if the file was saved incorrectly or is an old .xls file renamed to .xlsx.")
-            print("\n[SOLUTION]: Please open the file in Microsoft Excel, go to 'File' -> 'Info' -> and click the 'Convert' button. Then save the file.")
-            print("If you don't see a 'Convert' button, using 'File' -> 'Save As' and choosing 'Excel Workbook (*.xlsx)' will also fix it.")
-            return
         except Exception as e:
-            print(f"Error reading or selecting worksheet: {e}")
+            print(f"Error reading file: {e}")
+            print("Tip: Make sure the file is Tab-separated (or check the 'sep' parameter in the code) and UTF-8 encoded.")
             return
 
         if 'Fre' not in df.columns:
@@ -285,23 +230,23 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             df['Fre'] = pd.to_numeric(df['Fre'], errors='coerce').fillna(0).astype(int)
 
         if '单词' not in df.columns and '文法' not in df.columns:
-            print(f"Error: Worksheet '{chosen_sheet}' must contain at least a '单词' or '文法' column.")
+            print(f"Error: The file must contain at least a '单词' or '文法' column.")
             return
             
         has_reading_col = '读音' in df.columns
         has_meaning_col = '含义' in df.columns
         has_remarks_col = '备注' in df.columns
         if not has_reading_col:
-            print("Info: No '读音' (Reading) column in your Excel. Readings will be auto-generated.")
+            print("Info: No '读音' (Reading) column. Readings will be auto-generated.")
         if not has_meaning_col:
-            print("Info: No '含义' (Meaning) column in your Excel, definitions will not be shown.")
+            print("Info: No '含义' (Meaning) column, definitions will not be shown.")
         if not has_remarks_col:
-            print("Info: No '备注' (Remarks) column in your Excel, remarks will not be shown.")
+            print("Info: No '备注' (Remarks) column, remarks will not be shown.")
 
         df.sort_values(by='Fre', ascending=False, inplace=True)
         print("\nSorted by 'Fre' (Frequency). The most forgotten items will appear first.")
 
-        print("\n--- Japanese Study Helper Started ---")
+        print("\n--- Japanese Study Helper Started (TXT Mode) ---")
         if tts_mode == 'online':
             print("[TTS Mode]: Online Only")
         elif tts_mode == 'offline':
@@ -375,7 +320,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
                 if last_answered_correctly_index is not None:
                     prompt += " / x: Correct Last"
-                prompt += " / Enter: New Line)"
+                prompt += " / Enter: Anti-Peeking Mode)"
                 print(prompt + " " + str(i+1) + "/" + str(len(records)))
                 
                 event = keyboard.read_event(suppress=True)
@@ -385,12 +330,24 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 key = event.name.lower()
 
                 if key == 'enter':
-                    enter_press_count += 1
-                    if enter_press_count > 3:
-                        os.system('cls' if os.name == 'nt' else 'clear')
-                    else:
-                        print("\n" * 2)
-                        display_term(word, grammar)
+                    # Anti-peeking / Boss Mode
+                    # 1. Clear screen
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    
+                    # 2. Show a fake prompt to look like work
+                    fake_prompt = "C:\\Windows\\system32>_" if os.name == 'nt' else "$ _"
+                    print(fake_prompt, end="", flush=True)
+                    
+                    # 3. Wait for Enter again to resume
+                    time.sleep(0.3) # Prevent double trigger
+                    while True:
+                        resume_event = keyboard.read_event(suppress=True)
+                        if resume_event.event_type == keyboard.KEY_DOWN and resume_event.name.lower() == 'enter':
+                            break
+                    
+                    # 4. Resume: Clear screen and show the word again
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    display_term(word, grammar)
                     continue
                 
                 enter_press_count = 0
@@ -437,57 +394,47 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             return
             
         try:
-            print("Updating records back to DataFrame...")
+            print("Updating records back to Text file...")
             new_df = pd.DataFrame(records) 
-            
             if 'Fre' in new_df.columns:
                 print("Re-sorting by 'Fre' before saving...")
                 new_df.sort_values(by='Fre', ascending=False, inplace=True)
-
-            all_sheets_data[chosen_sheet] = new_df
-
-            print("Saving file and preserving column widths...")
-            book = load_workbook(file_path)
-            col_widths = {}
-            for sheet_name in book.sheetnames:
-                col_widths[sheet_name] = {
-                    letter: dim.width for letter, dim in book[sheet_name].column_dimensions.items()
-                }
             
-            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                for sheet_name, sheet_data in all_sheets_data.items():
-                    sheet_data.to_excel(writer, sheet_name=sheet_name, index=False)
-                    
-                    if sheet_name in col_widths:
-                        ws = writer.sheets[sheet_name]
-                        for col_letter, width in col_widths[sheet_name].items():
-                            if width:
-                               ws.column_dimensions[col_letter].width = width
-
-            print("\nStudy session finished! Your progress has been saved successfully, and column widths are preserved.")
+            new_df.to_csv(file_path, sep='\t', index=False, encoding='utf-8')
+            
+            print("\nStudy session finished! Your progress has been saved successfully to the txt file.")
+            
         except PermissionError:
-            print(f"\nError saving file: Permission denied. Please close the Excel file '{file_path}' and try again.")
+            print(f"\nError saving file: Permission denied. Please close the file '{file_path}' and try again.")
         except Exception as e:
             print(f"\nAn unknown error occurred while saving the file: {e}")
+            
     finally:
         if gtts_available:
             pygame.quit()
 
-
 if __name__ == '__main__':
     
-    excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
-                  "3_22_07.xlsx", "4_21_12.xlsx",
-                  "5_20_12.xlsx", "6_19_12.xlsx",
-                  "7_19_07.xlsx",
-                  "13_24_12.xlsx",
-                  "14_25_07.xlsx"]
 
-    excel_file_path = excel_list[8]
-    
-    study_sheet = 0
+    txt_list = [
+        "1_21_07_Sheet1.txt", 
+        "2_22_12_Sheet1.txt", 
+        "3_22_07_Sheet1.txt", 
+        "4_21_12_Sheet1.txt",
+        "5_20_12_Sheet1.txt", 
+        "6_19_12_Sheet1.txt",
+        "7_19_07_Sheet1.txt"
+    ]
 
-    preferred_tts_engine = 'auto' 
+ 
+    txt_file_path = txt_list[4] 
 
-    study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
 
+    study_sheet = None
+
+    preferred_tts_engine = 'online' 
+
+    study_helper(txt_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+
+    for i in range(10):
+        print("\n")
