@@ -384,9 +384,9 @@ def sentence_listening_practice(filepath, repeat_times=3, whisper_model="base"):
         pygame.quit()
 
 if __name__ == '__main__':
-    audio_file = './21_7/1_3.mp3'
+    audio_file = './21_7/5_2.mp3'
     sentence_listening_practice(
         filepath=audio_file, 
-        repeat_times=3,  # Set to 1 for Continuous Mode
+        repeat_times=1,  # Set to 1 for Continuous Mode
         whisper_model="large"
     )
