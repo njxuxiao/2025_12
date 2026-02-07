@@ -9,14 +9,14 @@ import requests
 import urllib.request
 import io
 
-# 尝试导入 msvcrt (Windows下用于检测窗口焦点按键)
+# Try importing msvcrt for Windows focus detection
 try:
     if os.name == 'nt':
         import msvcrt
 except ImportError:
     pass
 
-# 保留 keyboard 库仅作为非Windows环境的备选，或者用于特定辅助
+# Keep keyboard library as fallback for non-Windows environments
 try:
     import keyboard
 except ImportError:
@@ -52,6 +52,7 @@ except ImportError:
 # Global flags to optimize and silence repetitive TTS logging
 _gtts_connection_info_printed = False
 _gtts_successful_tld = None
+_gtts_successful_proxy = None  # Global variable to record the last successful proxy
 
 def get_pyttsx3_japanese_voice_id():
     if not pyttsx3_available:
@@ -82,15 +83,23 @@ def get_pyttsx3_japanese_voice_id():
 
 
 def speak_with_gtts(text):
-    global _gtts_connection_info_printed, _gtts_successful_tld
+    global _gtts_connection_info_printed, _gtts_successful_tld, _gtts_successful_proxy
     if not gtts_available or not text:
         return False
     
     success = False
+    
+    # Optimization 1: If there was a successful TLD, try only that one; otherwise try the list
     tld_list = [_gtts_successful_tld] if _gtts_successful_tld else ['com', 'co.jp', 'ca', 'com.au']
     
     # --- Proxy List Setup ---
-    proxy_list = ['http://127.0.0.1:7890', 'http://109.123.97.12:9090']
+    raw_proxy_list = ['http://127.0.0.1:7890', 'http://109.123.97.12:9090']
+    
+    # Optimization 2: If there was a successful proxy, prioritize it to avoid timeouts
+    if _gtts_successful_proxy and _gtts_successful_proxy in raw_proxy_list:
+        proxy_list = [_gtts_successful_proxy] + [p for p in raw_proxy_list if p != _gtts_successful_proxy]
+    else:
+        proxy_list = raw_proxy_list
     
     original_http_proxy = os.environ.get('HTTP_PROXY')
     original_https_proxy = os.environ.get('HTTPS_PROXY')
@@ -105,7 +114,8 @@ def speak_with_gtts(text):
             os.environ['HTTP_PROXY'] = proxy_address
             os.environ['HTTPS_PROXY'] = proxy_address
             
-            if not _gtts_connection_info_printed:
+            if not _gtts_connection_info_printed and proxy_address != _gtts_successful_proxy:
+                # Print only when trying a new proxy or connecting for the first time
                 print(f" -> Attempting connection using Proxy: {proxy_address}")
 
             for tld in tld_list:
@@ -117,10 +127,13 @@ def speak_with_gtts(text):
                     tts.write_to_fp(audio_buffer)
                     success = True
                     
+                    # Record successful configuration
+                    _gtts_successful_proxy = proxy_address
+                    _gtts_successful_tld = tld
+                    
                     if not _gtts_connection_info_printed:
                         print(f"     Success! Connected via '{tld}' using proxy '{proxy_address}'.")
                         _gtts_connection_info_printed = True
-                        _gtts_successful_tld = tld
                     break 
                 except Exception as e:
                     if not _gtts_connection_info_printed:
@@ -331,6 +344,9 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         records = df.to_dict('records')
         original_indices = df.index.tolist()
 
+        # Initialize TTS Timing: False = After Answer (Default), True = Immediate
+        speak_immediate = False 
+
         i = 0
         while i < len(records):
             current_record = records[i]
@@ -382,36 +398,36 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 elif auto_mode_current_engine == 'pyttsx3':
                     speak_with_pyttsx3(japanese_voice_id, text_to_speak)
 
-            speak()
+            # If enabled, speak immediately upon showing the word
+            if speak_immediate:
+                speak()
 
             key = None
             while True:
                 prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
                 if last_answered_correctly_index is not None:
                     prompt += " / x: Correct Last"
-                prompt += " / Enter: Privacy Mode)" 
+                prompt += " / L: Toggle TTS / Enter: Privacy Mode)" 
                 print(prompt + " " + str(i+1) + "/" + str(len(records)), flush=True)
                 
                 # --- [OPTIMIZED KEYBOARD HANDLING] ---
-                # 使用 msvcrt (Windows) 本地监听，避免全局 Hook 导致的卡顿和输入冲突
-                # 只有当控制台窗口在前台时，按键才会被捕获。切换窗口后脚本自动挂起。
+                # Use msvcrt (Windows) for local listening to avoid lag and input conflicts
                 
                 if os.name == 'nt':
-                    # Windows Logic: 使用 msvcrt (高效，无冲突)
-                    # 这是一个阻塞调用，直到按下键为止
+                    # Windows Logic: msvcrt (Efficient, no conflicts)
                     try:
                         key_stroke = msvcrt.getwch()
                         
-                        # 处理前缀：\xe0 是标准扩展键前缀，\x00 是某些键盘/环境的特殊键前缀
+                        # Handle prefixes
                         if key_stroke in ['\xe0', '\x00']:
-                            key_stroke = msvcrt.getwch() # 读取第二个字节
+                            key_stroke = msvcrt.getwch() # Read second byte
                             if key_stroke == 'M': # Right Arrow
                                 key = 'right'
                             elif key_stroke == 'K': # Left Arrow
                                 key = 'left'
                             else:
                                 key = 'unknown'
-                        elif key_stroke == '\r': # Enter键
+                        elif key_stroke == '\r': # Enter key
                             key = 'enter'
                         elif key_stroke.lower() == 'q':
                             key = 'q'
@@ -419,42 +435,40 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                             key = '0'
                         elif key_stroke.lower() == 'x':
                             key = 'x'
+                        elif key_stroke.lower() == 'l':
+                            key = 'l'
                         else:
                             key = 'unknown'
                     except Exception as e:
-                        # 防止奇奇怪怪的解码错误导致崩溃，默认重试
+                        # Prevent crashes from decoding errors
                         key = 'unknown'
                 else:
                     # Non-Windows (Mac/Linux) Logic: Fallback to keyboard library
-                    # 这里依然使用全局hook，但非Windows用户较少遇到该特定卡顿问题
                     event = keyboard.read_event(suppress=True)
                     while event.event_type != keyboard.KEY_DOWN:
                         event = keyboard.read_event(suppress=True)
                     key = event.name.lower()
 
-                # --- [MODIFIED] Privacy Mode Logic ---
-                # Triggered by 'enter'
+                # --- Toggle TTS Timing Logic ---
+                if key == 'l':
+                    speak_immediate = not speak_immediate
+                    mode_str = "Immediate (Speaking now)" if speak_immediate else "After Answer"
+                    print(f"\n[TTS Mode Switched]: {mode_str}")
+                    if speak_immediate:
+                        speak() # Speak now if switching to immediate mode
+                    continue # Go back to waiting for an answer key
+
+                # --- Privacy Mode Logic ---
                 if key == 'enter':
-                    # 注意：由于现在使用的是 msvcrt，无需 keyboard.unhook_all()
-                    # 切换窗口后，msvcrt 不会接收到输入，所以天然支持多任务处理
-                    
                     # 1. Clear Screen
                     os.system('cls' if os.name == 'nt' else 'clear')
                     print("\n" * 10)
-                    print(" " * 20 + "╔══════════════════════════════╗")
-                    print(" " * 20 + "║   [ PRIVACY MODE ACTIVATED ] ║")
-                    print(" " * 20 + "║                              ║")
-                    print(" " * 20 + "║   (Keyboard Released)        ║")
-                    print(" " * 20 + "║   Press [ENTER] to resume    ║")
-                    print(" " * 20 + "║   Press [Q] here to quit     ║")
-                    print(" " * 20 + "╚══════════════════════════════╝")
                     
                     # 2. Wait for resume or quit
                     resume_action = None
                     
                     if os.name == 'nt': # Windows specific logic
                         while True:
-                            # 循环检测，确保不阻塞系统
                             if msvcrt.kbhit():
                                 key_p = msvcrt.getwch()
                                 if key_p == '\r': # Enter
@@ -471,7 +485,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     
                     if resume_action == 'quit':
                         key = 'q'
-                        break # Break inner loop, will hit 'if key == q' below
+                        break # Break inner loop
                     
                     # 3. Resume
                     os.system('cls' if os.name == 'nt' else 'clear')
@@ -506,12 +520,16 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
                 display_details(meaning, display_remarks)
+                if not speak_immediate:
+                    speak() 
                 time.sleep(2)
 
             elif key == 'right':
                 display_details(meaning, display_remarks)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
                 last_answered_correctly_index = original_index
+                if not speak_immediate:
+                    speak()
 
             i += 1
 
@@ -563,6 +581,7 @@ if __name__ == '__main__':
     
     excel_list = ["transform.xlsx", ]
 
+    # Note: Ensure this file exists or change to your filename
     excel_file_path = excel_list[8]
     
     study_sheet = 0
@@ -570,5 +589,6 @@ if __name__ == '__main__':
     preferred_tts_engine = 'auto' 
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+
 
 
