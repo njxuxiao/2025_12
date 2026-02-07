@@ -196,7 +196,7 @@ def display_details(meaning, remarks):
     print("╰" + "┈"*50 + "╯")
 
 
-def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mode='immediate'):
+def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     if gtts_available:
         pygame.init()
         pygame.mixer.init()
@@ -204,9 +204,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
     try:
         japanese_voice_id = get_pyttsx3_japanese_voice_id()
         auto_mode_current_engine = 'gTTS' if gtts_available else 'pyttsx3'
-
-        # tts_timing_mode is now passed as an argument. 
-        # Default is 'immediate', can be set to 'after_answer' in main.
 
         kks = pykakasi.kakasi()
 
@@ -311,8 +308,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
             print("[TTS Mode]: Offline Only")
         else:
             print("[TTS Mode]: Auto (Online first, fallback to Offline)")
-        
-        print(f"[TTS Timing]: {tts_timing_mode} (Press 't' to toggle)")
             
         print("[IMPORTANT] Please make sure your input method is in English mode to ensure key presses are registered correctly.")
         
@@ -373,24 +368,15 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
                 elif auto_mode_current_engine == 'pyttsx3':
                     speak_with_pyttsx3(japanese_voice_id, text_to_speak)
 
-            # --- Logic for Immediate TTS ---
-            if tts_timing_mode == 'immediate':
-                speak()
-            # -------------------------------
+            speak()
 
             key = None
             while True:
-                # Update Prompt to show current TTS Timing Mode
-                tts_status = "Immediate" if tts_timing_mode == 'immediate' else "After Ans"
-                prompt = f"Action: [→:Know | 0:Forget | t:TTS({tts_status}) | q:Quit"
-
+                prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
                 if last_answered_correctly_index is not None:
-                    prompt += " | x:Undo]"
-                else:
-                    prompt += "]"
-
-                # Using carriage return \r to overwrite the prompt line if loop continues (cleaner UI)
-                print(f"\r{prompt} Progress: {i+1}/{len(records)} ", end="", flush=True)
+                    prompt += " / x: Correct Last"
+                prompt += " / Enter: New Line)"
+                print(prompt + " " + str(i+1) + "/" + str(len(records)))
                 
                 event = keyboard.read_event(suppress=True)
                 while event.event_type != keyboard.KEY_DOWN:
@@ -398,23 +384,10 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
                 
                 key = event.name.lower()
 
-                # --- Toggle TTS Mode ---
-                if key == 't':
-                    if tts_timing_mode == 'immediate':
-                        tts_timing_mode = 'after_answer'
-                    else:
-                        tts_timing_mode = 'immediate'
-                    # Clear line to refresh prompt
-                    print(" " * 100, end="\r") 
-                    continue
-                # -----------------------
-
                 if key == 'enter':
                     enter_press_count += 1
                     if enter_press_count > 3:
                         os.system('cls' if os.name == 'nt' else 'clear')
-                        print("\n" * 2)
-                        display_term(word, grammar)
                     else:
                         print("\n" * 2)
                         display_term(word, grammar)
@@ -422,8 +395,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
                 
                 enter_press_count = 0
                 break
-            
-            print() # Newline after the \r prompt
             
             if key == 'q':
                 print("Saving progress and exiting...")
@@ -436,10 +407,10 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
                             record['Fre'] += 1
                             break
                     is_changed = True
-                    print(f"Corrected the previous item!")
+                    print(f"\nCorrected the previous item!")
                     last_answered_correctly_index = None
                 else:
-                    print("There is no previous item to correct.")
+                    print("\nThere is no previous item to correct.")
                 continue
 
             last_answered_correctly_index = None
@@ -450,23 +421,11 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
                 display_details(meaning, display_remarks)
-                
-                # --- Logic for After Answer TTS ---
-                if tts_timing_mode == 'after_answer':
-                    speak()
-                # ----------------------------------
-                
                 time.sleep(2)
 
             elif key == 'right':
                 display_details(meaning, display_remarks)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
-                
-                # --- Logic for After Answer TTS ---
-                if tts_timing_mode == 'after_answer':
-                    speak()
-                # ----------------------------------
-
                 last_answered_correctly_index = original_index
 
             i += 1
@@ -512,41 +471,25 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto', tts_timing_mod
         if gtts_available:
             pygame.quit()
 
-
 if __name__ == '__main__':
     
-    excel_list = [f for f in os.listdir('.') if f.endswith('.xlsx')]
-    target_file = 'all.xlsx'
-    if target_file in excel_list:
-        excel_list.remove(target_file)
-        has_all = True
-    else:
-        has_all = False
+    excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
+                  "3_22_07.xlsx", "4_21_12.xlsx",
+                  "5_20_12.xlsx", "6_19_12",
+                  "7_19_07",      "8_18_12",
+                  "9_18_07",      "10_17_12",
+                  "11_17_07",     "12_16_12",
+                  "13_23_07",      "14_23_12",
+                  "15_24_12",      "16_24_12.xlsx",
+                  "17_25_07.xlsx", "18_25_12"]
 
-    excel_list.sort(key=lambda x: int(x.split('_')[0]))
 
-    if has_all:
-        excel_list.append(target_file)
+    excel_file_path = excel_list[4]
 
-###############################################
-    if len(excel_list) >= 2:
-        excel_file_path = excel_list[-2]
-    elif len(excel_list) > 0:
-        excel_file_path = excel_list[0]
-    else:
-        print("No .xlsx files found.")
-        sys.exit()
-
-    study_sheet = 0
-###############################################
-    preferred_tts_engine = 'auto' 
     
-    # Options: 'immediate' (speak when word appears) OR 'after_answer' (speak after you press know/forget)
-    initial_timing_mode = 'immediate' 
+    study_sheet = 0
 
-    study_helper(
-        excel_file_path, 
-        sheet_to_study=study_sheet, 
-        tts_mode=preferred_tts_engine, 
-        tts_timing_mode=initial_timing_mode
-    )
+    preferred_tts_engine = 'online' 
+
+    study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+
