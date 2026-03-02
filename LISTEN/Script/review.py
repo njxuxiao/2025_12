@@ -581,12 +581,13 @@ if __name__ == '__main__':
     
     excel_list = ["./21_7/21_7.xlsx",      #4 sheet
                   "./22_12/22_12.xlsx",    #2 sheet
+                  "./24_07_n3/24_07.xlsx"
                   ]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[8]
+    excel_file_path = excel_list[2]
     
-    study_sheet = 0
+    study_sheet = 1
 
     preferred_tts_engine = 'auto' 
 
