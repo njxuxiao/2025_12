@@ -587,7 +587,7 @@ if __name__ == '__main__':
     # Note: Ensure this file exists or change to your filename
     excel_file_path = excel_list[2]
     
-    study_sheet = 1
+    study_sheet = 2
 
     preferred_tts_engine = 'auto' 
 
