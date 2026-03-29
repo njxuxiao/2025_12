@@ -9,14 +9,12 @@ import requests
 import urllib.request
 import io
 
-# Try importing msvcrt for Windows focus detection
 try:
     if os.name == 'nt':
         import msvcrt
 except ImportError:
     pass
 
-# Keep keyboard library as fallback for non-Windows environments
 try:
     import keyboard
 except ImportError:
@@ -49,10 +47,9 @@ except ImportError:
     print("  - pip install pyttsx3")
     pyttsx3_available = False
 
-# Global flags to optimize and silence repetitive TTS logging
 _gtts_connection_info_printed = False
 _gtts_successful_tld = None
-_gtts_successful_proxy = None  # Global variable to record the last successful proxy
+_gtts_successful_proxy = None  
 
 def get_pyttsx3_japanese_voice_id():
     if not pyttsx3_available:
@@ -89,13 +86,10 @@ def speak_with_gtts(text):
     
     success = False
     
-    # Optimization 1: If there was a successful TLD, try only that one; otherwise try the list
     tld_list = [_gtts_successful_tld] if _gtts_successful_tld else ['com', 'co.jp', 'ca', 'com.au']
     
-    # --- Proxy List Setup ---
     raw_proxy_list = ['http://127.0.0.1:7890', 'http://109.123.97.12:9090']
     
-    # Optimization 2: If there was a successful proxy, prioritize it to avoid timeouts
     if _gtts_successful_proxy and _gtts_successful_proxy in raw_proxy_list:
         proxy_list = [_gtts_successful_proxy] + [p for p in raw_proxy_list if p != _gtts_successful_proxy]
     else:
@@ -107,7 +101,6 @@ def speak_with_gtts(text):
     try:
         audio_buffer = io.BytesIO()
         
-        # Loop through proxies
         for proxy_address in proxy_list:
             if success: break 
 
@@ -115,7 +108,6 @@ def speak_with_gtts(text):
             os.environ['HTTPS_PROXY'] = proxy_address
             
             if not _gtts_connection_info_printed and proxy_address != _gtts_successful_proxy:
-                # Print only when trying a new proxy or connecting for the first time
                 print(f" -> Attempting connection using Proxy: {proxy_address}")
 
             for tld in tld_list:
@@ -127,7 +119,6 @@ def speak_with_gtts(text):
                     tts.write_to_fp(audio_buffer)
                     success = True
                     
-                    # Record successful configuration
                     _gtts_successful_proxy = proxy_address
                     _gtts_successful_tld = tld
                     
@@ -344,13 +335,51 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         records = df.to_dict('records')
         original_indices = df.index.tolist()
 
-        # Initialize TTS Timing: False = After Answer (Default), True = Immediate
         speak_immediate = False 
 
+        # Review queue setup
+        session_missed_ids = set()
+        session_missed_records = []
+        session_missed_original_indices = []
+        has_done_bulk_review = False
+
+        def get_fre0_boundary(start_idx, recs):
+            for idx in range(start_idx, len(recs)):
+                if recs[idx].get('Fre', 0) == 0:
+                    return idx
+            return len(recs)
+
         i = 0
-        while i < len(records):
+        while i < len(records) or (not has_done_bulk_review and session_missed_records):
+            
+            if i == len(records) and not has_done_bulk_review:
+                has_done_bulk_review = True
+                if session_missed_records:
+                    print("\n[Bulk Review] Reviewing all words missed in this session!")
+                    for idx_offset, rec in enumerate(session_missed_records):
+                        records.append(rec)
+                        original_indices.append(session_missed_original_indices[idx_offset])
+                    session_missed_records.clear()
+                    
+            if i >= len(records):
+                break
+
             current_record = records[i]
             original_index = original_indices[i]
+
+            # Trigger bulk review right before the first Fre=0 word
+            if not has_done_bulk_review and current_record.get('Fre', 0) == 0:
+                has_done_bulk_review = True
+                if session_missed_records:
+                    print("\n[Bulk Review] Reviewing all words missed in this session before new words!")
+                    for idx_offset, rec in enumerate(session_missed_records):
+                        records.insert(i + idx_offset, rec)
+                        original_indices.insert(i + idx_offset, session_missed_original_indices[idx_offset])
+                    session_missed_records.clear()
+                    
+                    # Update current pointers after insertion
+                    current_record = records[i]
+                    original_index = original_indices[i]
 
             word = str(current_record.get('单词', '')) if pd.notna(current_record.get('单词')) else ""
             grammar = str(current_record.get('文法', '')) if pd.notna(current_record.get('文法')) else ""
@@ -363,7 +392,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     result = kks.convert(word)
                     reading = "".join([item['hira'] for item in result])
                 except Exception as e:
-                    print(f"!! Could not convert '{word}' to hiragana: {e}")
+                    pass
 
             meaning = str(current_record.get('含义', '')) if has_meaning_col and pd.notna(current_record.get('含义')) else ""
             remarks = str(current_record.get('备注', '')) if has_remarks_col and pd.notna(current_record.get('备注')) else ""
@@ -398,7 +427,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 elif auto_mode_current_engine == 'pyttsx3':
                     speak_with_pyttsx3(japanese_voice_id, text_to_speak)
 
-            # If enabled, speak immediately upon showing the word
             if speak_immediate:
                 speak()
 
@@ -410,84 +438,61 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 prompt += " / L: Toggle TTS / Enter: Privacy Mode)" 
                 print(prompt + " " + str(i+1) + "/" + str(len(records)), flush=True)
                 
-                # --- [OPTIMIZED KEYBOARD HANDLING] ---
-                # Use msvcrt (Windows) for local listening to avoid lag and input conflicts
-                
                 if os.name == 'nt':
-                    # Windows Logic: msvcrt (Efficient, no conflicts)
                     try:
                         key_stroke = msvcrt.getwch()
                         
-                        # Handle prefixes
                         if key_stroke in ['\xe0', '\x00']:
-                            key_stroke = msvcrt.getwch() # Read second byte
-                            if key_stroke == 'M': # Right Arrow
-                                key = 'right'
-                            elif key_stroke == 'K': # Left Arrow
-                                key = 'left'
-                            else:
-                                key = 'unknown'
-                        elif key_stroke == '\r': # Enter key
-                            key = 'enter'
-                        elif key_stroke.lower() == 'q':
-                            key = 'q'
-                        elif key_stroke == '0':
-                            key = '0'
-                        elif key_stroke.lower() == 'x':
-                            key = 'x'
-                        elif key_stroke.lower() == 'l':
-                            key = 'l'
-                        else:
-                            key = 'unknown'
-                    except Exception as e:
-                        # Prevent crashes from decoding errors
+                            key_stroke = msvcrt.getwch()
+                            if key_stroke == 'M': key = 'right'
+                            elif key_stroke == 'K': key = 'left'
+                            else: key = 'unknown'
+                        elif key_stroke == '\r': key = 'enter'
+                        elif key_stroke.lower() == 'q': key = 'q'
+                        elif key_stroke == '0': key = '0'
+                        elif key_stroke.lower() == 'x': key = 'x'
+                        elif key_stroke.lower() == 'l': key = 'l'
+                        else: key = 'unknown'
+                    except Exception:
                         key = 'unknown'
                 else:
-                    # Non-Windows (Mac/Linux) Logic: Fallback to keyboard library
                     event = keyboard.read_event(suppress=True)
                     while event.event_type != keyboard.KEY_DOWN:
                         event = keyboard.read_event(suppress=True)
                     key = event.name.lower()
 
-                # --- Toggle TTS Timing Logic ---
                 if key == 'l':
                     speak_immediate = not speak_immediate
                     mode_str = "Immediate (Speaking now)" if speak_immediate else "After Answer"
                     print(f"\n[TTS Mode Switched]: {mode_str}")
                     if speak_immediate:
-                        speak() # Speak now if switching to immediate mode
-                    continue # Go back to waiting for an answer key
+                        speak()
+                    continue 
 
-                # --- Privacy Mode Logic ---
                 if key == 'enter':
-                    # 1. Clear Screen
                     os.system('cls' if os.name == 'nt' else 'clear')
                     print("\n" * 10)
                     
-                    # 2. Wait for resume or quit
                     resume_action = None
-                    
-                    if os.name == 'nt': # Windows specific logic
+                    if os.name == 'nt':
                         while True:
                             if msvcrt.kbhit():
                                 key_p = msvcrt.getwch()
-                                if key_p == '\r': # Enter
+                                if key_p == '\r': 
                                     resume_action = 'resume'
                                     break
                                 elif key_p.lower() == 'q':
                                     resume_action = 'quit'
                                     break
-                            time.sleep(0.05) # Low CPU usage
+                            time.sleep(0.05)
                     else:
-                        # Fallback for Mac/Linux
                         input("Privacy Mode Active. Press [Enter] to resume...")
                         resume_action = 'resume'
                     
                     if resume_action == 'quit':
                         key = 'q'
-                        break # Break inner loop
+                        break 
                     
-                    # 3. Resume
                     os.system('cls' if os.name == 'nt' else 'clear')
                     display_term(word, grammar)
                     continue 
@@ -504,6 +509,20 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     for idx, record in enumerate(records):
                         if original_indices[idx] == last_answered_correctly_index:
                             record['Fre'] += 1
+                            
+                            # Track for bulk review
+                            if id(record) not in session_missed_ids:
+                                session_missed_records.append(record)
+                                session_missed_original_indices.append(last_answered_correctly_index)
+                                session_missed_ids.add(id(record))
+
+                            # Spaced Repetition logic (cap before Fre=0 items)
+                            boundary = get_fre0_boundary(i + 1, records)
+                            insert_pos = min(i + 5, boundary)
+                            records.insert(insert_pos, record)
+                            original_indices.insert(insert_pos, last_answered_correctly_index)
+                            print(f"  -> [Spaced Repetition] Word inserted ahead for review (before new words).")
+                            
                             break
                     is_changed = True
                     print(f"\nCorrected the previous item!")
@@ -522,6 +541,20 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 display_details(meaning, display_remarks)
                 if not speak_immediate:
                     speak() 
+                
+                # Track for bulk review
+                if id(current_record) not in session_missed_ids:
+                    session_missed_records.append(current_record)
+                    session_missed_original_indices.append(original_index)
+                    session_missed_ids.add(id(current_record))
+
+                # Spaced Repetition logic (cap before Fre=0 items)
+                boundary = get_fre0_boundary(i + 1, records)
+                insert_pos = min(i + 5, boundary)
+                records.insert(insert_pos, current_record)
+                original_indices.insert(insert_pos, original_index)
+                print(f"  -> [Spaced Repetition] Will review again shortly (before new words).")
+                
                 time.sleep(2)
 
             elif key == 'right':
@@ -541,7 +574,16 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             
         try:
             print("Updating records back to DataFrame...")
-            new_df = pd.DataFrame(records) 
+            
+            # Deduplication
+            unique_records = []
+            seen_ids = set()
+            for rec in records:
+                if id(rec) not in seen_ids:
+                    unique_records.append(rec)
+                    seen_ids.add(id(rec))
+            
+            new_df = pd.DataFrame(unique_records) 
             
             if 'Fre' in new_df.columns:
                 print("Re-sorting by 'Fre' before saving...")
@@ -581,11 +623,12 @@ if __name__ == '__main__':
     
     excel_list = ["./21_7/21_7.xlsx",      #4 sheet
                   "./22_12/22_12.xlsx",    #2 sheet
-                  "./24_07_n3/24_07.xlsx"
+                  "./24_07_n3/24_07.xlsx", #3 sheet
+                  "./23_12_n3/23_12.xlsx", #3 sheet  
                   ]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[2]
+    excel_file_path = excel_list[3]
     
     study_sheet = 2
 
