@@ -64,7 +64,7 @@ def main():
 
     # 1. Set the folder path containing MP3 files
     # The script will automatically scan all .mp3 files in this folder and subfolders
-    ROOT_FOLDER = r"./23_12_n3"  # e.g.: r"D:\JapaneseListening\21_7"
+    ROOT_FOLDER = r"./23_07_n3"  # e.g.: r"D:\JapaneseListening\21_7"
 
     # 2. Or, if you only want to process specific files, list their full paths here
     SPECIFIC_FILES = [

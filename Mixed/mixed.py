@@ -623,9 +623,9 @@ if __name__ == '__main__':
     
     excel_list = ["0_transform.xlsx", "1_zhouyf.xlsx"]
 
-    excel_file_path = excel_list[0]
+    excel_file_path = excel_list[1]
     
-    study_sheet = 0
+    study_sheet = 2
 
     preferred_tts_engine = 'auto' 
 
