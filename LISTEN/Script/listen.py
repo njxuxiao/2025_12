@@ -67,6 +67,7 @@ def input_collector(q):
             if key == keyboard.Key.right: command = 'right'
             elif key == keyboard.Key.left: command = 'left'
             elif key == keyboard.Key.space: command = 'toggle_pause'
+            elif key == keyboard.Key.enter: command = 'toggle_privacy'
         if command:
             q.put(command)
 
@@ -82,6 +83,7 @@ def run_sentence_playback_mode(sentences_data, repeat_times, command_queue):
     is_paused = False
     command_to_process = None
     playback_speed = 1.0
+    privacy_mode = False
 
     while 0 <= current_sentence_index < len(sentences_data):
         if command_to_process:
@@ -98,21 +100,39 @@ def run_sentence_playback_mode(sentences_data, repeat_times, command_queue):
         sentence_audio = sentence_info['audio']
         sentence_text = sentence_info['text']
         
-        print("\n" + "="*50)
-        print(f"--- Sentence {current_sentence_index + 1}/{len(sentences_data)} ---")
-        print(f"  Text: {sentence_text}")
-        print("="*50)
+        if not privacy_mode:
+            print("\n" + "="*50)
+            print(f"--- Sentence {current_sentence_index + 1}/{len(sentences_data)} ---")
+            print(f"  Text: {sentence_text}")
+            print("="*50)
+        else:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            print("\n[ --- ]")
 
         playback_interrupted = False
         for i in range(repeat_times):
             segment_with_speed = apply_speed_change(sentence_audio, playback_speed)
-            print(f"Playing: {i + 1}/{repeat_times} (Speed: {playback_speed:.1f}x)")
+            if not privacy_mode:
+                print(f"Playing: {i + 1}/{repeat_times} (Speed: {playback_speed:.1f}x)")
             play_audio(segment_with_speed)
             
             while pygame.mixer.get_busy() or is_paused:
                 try:
                     command = command_queue.get_nowait()
-                    if command == 'toggle_pause':
+                    if command == 'toggle_privacy':
+                        privacy_mode = not privacy_mode
+                        if privacy_mode:
+                            os.system('cls' if os.name == 'nt' else 'clear')
+                            print("\n[ --- ]")
+                        else:
+                            os.system('cls' if os.name == 'nt' else 'clear')
+                            print("\n" + "="*50)
+                            print(f"--- Sentence {current_sentence_index + 1}/{len(sentences_data)} ---")
+                            print(f"  Text: {sentence_text}")
+                            print("="*50)
+                            print(f"Playing: {i + 1}/{repeat_times} (Speed: {playback_speed:.1f}x)")
+                        continue
+                    elif command == 'toggle_pause':
                         if is_paused: pygame.mixer.unpause(); is_paused = False; print("[ Resumed ]", end="", flush=True)
                         else: pygame.mixer.pause(); is_paused = True; print("\n[ Paused ]", end="", flush=True)
                     elif command in ['right', 'left', 'q', 'r']:
@@ -151,7 +171,7 @@ def run_continuous_mode(filepath, sentences_data, command_queue):
     Arrows (right/left) map to Seek +5s/-5s here.
     """
     print("\nStarting Continuous Mode (Direct Playback).")
-    print("Controls: (Space) Pause, (→) +5s, (←) -5s, (d/a/s) Speed, (q) Quit")
+    print("Controls: (Space) Pause, (→) +5s, (←) -5s, (d/a/s) Speed, (Enter) Privacy, (q) Quit")
     
     # Initialize Audio
     # We load the file directly into pygame mixer for streaming (fast startup)
@@ -160,6 +180,7 @@ def run_continuous_mode(filepath, sentences_data, command_queue):
     
     playback_speed = 1.0
     is_paused = False
+    privacy_mode = False
     
     # To track position accurately across seeks and speed changes
     # start_time_offset: where in the audio file (seconds) we started playing
@@ -193,6 +214,16 @@ def run_continuous_mode(filepath, sentences_data, command_queue):
         try:
             command = command_queue.get_nowait()
             
+            # --- Privacy Toggle ---
+            if command == 'toggle_privacy':
+                privacy_mode = not privacy_mode
+                if privacy_mode:
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    print("\n[ --- ]")
+                else:
+                    current_sentence_index = -1 # Force UI redraw
+                continue
+
             # --- Quit ---
             if command == 'q':
                 pygame.mixer.music.stop()
@@ -282,14 +313,15 @@ def run_continuous_mode(filepath, sentences_data, command_queue):
                 # Only refresh screen if sentence changed
                 if found_index != -1 and found_index != current_sentence_index:
                     current_sentence_index = found_index
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    print("\n" + "="*50)
-                    print(f"--- Playing (Repeat=1) | Speed: {playback_speed:.1f}x ---")
-                    print(f"Controls: (→) +5s, (←) -5s, (Space) Pause, (d/a/s) Speed")
-                    print("-" * 50)
-                    print(f"Sentence {current_sentence_index + 1}:")
-                    print(f"{sentences_data[current_sentence_index]['text']}")
-                    print("="*50)
+                    if not privacy_mode:
+                        os.system('cls' if os.name == 'nt' else 'clear')
+                        print("\n" + "="*50)
+                        print(f"--- Playing (Repeat=1) | Speed: {playback_speed:.1f}x ---")
+                        print(f"Controls: (→) +5s, (←) -5s, (Space) Pause, (d/a/s) Speed, (Enter) Privacy")
+                        print("-" * 50)
+                        print(f"Sentence {current_sentence_index + 1}:")
+                        print(f"{sentences_data[current_sentence_index]['text']}")
+                        print("="*50)
         
         time.sleep(0.05)
 
@@ -384,7 +416,7 @@ def sentence_listening_practice(filepath, repeat_times=3, whisper_model="base"):
         pygame.quit()
 
 if __name__ == '__main__':
-    audio_file = './23_07_n3/1_1.mp3'
+    audio_file = './21_7/1_3.mp3'
     sentence_listening_practice(
         filepath=audio_file, 
         repeat_times=1,  # Set to 1 for Continuous Mode
