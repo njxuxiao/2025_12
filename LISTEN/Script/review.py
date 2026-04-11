@@ -621,18 +621,21 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
 if __name__ == '__main__':
     
-    excel_list = ["./21_7/21_7.xlsx",      #4 sheet
-                  "./22_12/22_12.xlsx",    #2 sheet
-                  "./24_07_n3/24_07.xlsx", #3 sheet
-                  "./23_12_n3/23_12.xlsx", #3 sheet  
+    excel_list = ["./21_7/21_7.xlsx",      #0
+                  "./22_12/22_12.xlsx",    #1
+                  "./24_07_n3/24_07.xlsx", #2
+                  "./23_12_n3/23_12.xlsx", #3
+                  "./23_07_n3/23_07.xlsx", #4
                   ]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[3]
+    excel_file_path = excel_list[4]
     
     study_sheet = 2
 
     preferred_tts_engine = 'auto' 
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+
+    for i in range(10): print("\n")
 

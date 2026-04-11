@@ -589,3 +589,5 @@ if __name__ == '__main__':
     preferred_tts_engine = 'auto' 
 
     study_helper(excel_file_path, sheet_to_study=study_sheet, tts_mode=preferred_tts_engine)
+
+    for i in range(10): print("\n")

@@ -1,0 +1,1 @@
+ffmpeg -i .\24_7_n3.aac -ss 00:24:09 -to 00:25:47 -acodec libmp3lame -q:a 2 3_1.mp3
