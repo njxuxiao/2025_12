@@ -4,10 +4,9 @@ import sys
 from openpyxl import load_workbook
 import tempfile
 import time
-from zipfile import BadZipFile
-import requests
-import urllib.request
+import threading
 import io
+from zipfile import BadZipFile
 
 try:
     if os.name == 'nt':
@@ -51,6 +50,12 @@ _gtts_connection_info_printed = False
 _gtts_successful_tld = None
 _gtts_successful_proxy = None  
 
+tts_control = {
+    "engine": None,          
+    "stop_requested": False, 
+    "lock": threading.Lock() 
+}
+
 def get_pyttsx3_japanese_voice_id():
     if not pyttsx3_available:
         return None
@@ -85,9 +90,7 @@ def speak_with_gtts(text):
         return False
     
     success = False
-    
     tld_list = [_gtts_successful_tld] if _gtts_successful_tld else ['com', 'co.jp', 'ca', 'com.au']
-    
     raw_proxy_list = ['http://127.0.0.1:7890', 'http://109.123.97.12:9090']
     
     if _gtts_successful_proxy and _gtts_successful_proxy in raw_proxy_list:
@@ -154,18 +157,47 @@ def speak_with_gtts(text):
             os.environ['HTTPS_PROXY'] = original_https_proxy
 
 
+def _threaded_speak_pyttsx3(voice_id, text):
+    if tts_control["stop_requested"]: return
+
+    try:
+        engine = pyttsx3.init()
+        
+        if tts_control["stop_requested"]:
+            engine.stop()
+            return
+
+        with tts_control["lock"]:
+            if tts_control["stop_requested"]:
+                engine.stop()
+                return
+            tts_control["engine"] = engine
+        
+        engine.setProperty('voice', voice_id)
+        
+        if tts_control["stop_requested"]:
+            engine.stop()
+            return
+
+        engine.say(text)
+        engine.runAndWait()
+        engine.stop()
+        
+    except Exception:
+        pass 
+    finally:
+        with tts_control["lock"]:
+            tts_control["engine"] = None
+
 def speak_with_pyttsx3(voice_id, text):
     if voice_id and text:
-        try:
-            if gtts_available:
-                pygame.mixer.stop()
-            engine = pyttsx3.init()
-            engine.setProperty('voice', voice_id)
-            engine.say(text)
-            engine.runAndWait()
-            engine.stop()
-        except Exception as e:
-            print(f"\n!! Error using local TTS: {e}")
+        tts_control["stop_requested"] = False
+        if gtts_available:
+            pygame.mixer.stop()
+            
+        t = threading.Thread(target=_threaded_speak_pyttsx3, args=(voice_id, text))
+        t.daemon = True
+        t.start()
 
 
 def get_display_length(s):
@@ -196,14 +228,14 @@ def display_term(word, grammar):
     print("║" + " "*50 + "║")
     print("╚" + "═"*50 + "╝")
 
-def display_details(meaning, remarks):
+def display_details(meaning, remarks, word):
     if not meaning and not remarks:
         return
 
     print("╭" + "┈"*50 + "╮")
     
     if meaning:
-        line = f"  [Meaning]: {meaning}"
+        line = f"  [Meaning]: {word}---> {meaning}"
         padding = 50 - get_display_length(line)
         if padding < 0: padding = 0
         print("┆" + line + " "*padding + "┆")
@@ -216,6 +248,59 @@ def display_details(meaning, remarks):
 
     print("╰" + "┈"*50 + "╯")
 
+def handle_anti_peeking(word, grammar, extra_ui_callback=None):
+    tts_control["stop_requested"] = True
+
+    if gtts_available:
+        try: pygame.mixer.stop()
+        except: pass
+    
+    with tts_control["lock"]:
+        if tts_control["engine"]:
+            try: tts_control["engine"].stop()
+            except: pass
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+    
+    print("Screen cleared. Press Enter again to resume, or 'q' to quit.")
+    
+    while keyboard.is_pressed('enter'):
+        time.sleep(0.05)
+
+    while True:
+        event = keyboard.read_event(suppress=True)
+        if event.event_type == keyboard.KEY_DOWN:
+            if event.name.lower() == 'enter':
+                tts_control["stop_requested"] = False
+                os.system('cls' if os.name == 'nt' else 'clear')
+                display_term(word, grammar)
+                if extra_ui_callback:
+                    extra_ui_callback()
+                return False
+            elif event.name.lower() == 'q':
+                return True
+
+def smart_sleep(seconds, word, grammar, meaning=None, remarks=None, display_remarks=None):
+    start_time = time.time()
+    while time.time() - start_time < seconds:
+        if keyboard.is_pressed('enter'):
+            should_quit = handle_anti_peeking(word, grammar)
+            if should_quit:
+                return "quit"
+            return True 
+        time.sleep(0.05)
+    return False
+
+def calculate_smart_score(fre, history):
+    h = str(history).replace('nan', '')
+    fails = h.count('0')
+    succs = h.count('1')
+    score = fre
+    if fails >= 3:
+        score += 3
+    if succs >= 3:
+        score -= 2
+    return max(0, score)
 
 def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
     if gtts_available:
@@ -227,74 +312,51 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         auto_mode_current_engine = 'gTTS' if gtts_available else 'pyttsx3'
 
         kks = pykakasi.kakasi()
-
+        
         all_sheets_data = {}
         chosen_sheet = None
+
         try:
             if not os.path.exists(file_path):
                 print(f"Error: File not found '{file_path}'.")
                 return
 
-            if not file_path.endswith('.xlsx'):
-                print(f"Error: This feature requires an .xlsx format Excel file.")
-                print(f"Please open '{os.path.basename(file_path)}' with Excel and save it as .xlsx format.")
-                return
-            
-            xls = pd.ExcelFile(file_path, engine='openpyxl')
-            sheet_names = xls.sheet_names
-
-            if not sheet_names:
-                print("Error: No worksheets found in the Excel file.")
+            print(f"Reading file: {file_path}")
+            if os.path.getsize(file_path) == 0:
+                print("Error: The file is empty.")
                 return
 
-            if sheet_to_study is not None:
-                if isinstance(sheet_to_study, int):
-                    if 0 <= sheet_to_study < len(sheet_names):
+            if file_path.endswith('.xlsx'):
+                xls = pd.ExcelFile(file_path, engine='openpyxl')
+                sheet_names = xls.sheet_names
+                
+                if not sheet_names:
+                    print("Error: No worksheets found in the Excel file.")
+                    return
+
+                if sheet_to_study is not None:
+                    if isinstance(sheet_to_study, int) and 0 <= sheet_to_study < len(sheet_names):
                         chosen_sheet = sheet_names[sheet_to_study]
-                    else:
-                        print(f"Error: Specified sheet index {sheet_to_study} is invalid. Valid range is 0 to {len(sheet_names)-1}.")
-                        return
-                elif isinstance(sheet_to_study, str):
-                    if sheet_to_study in sheet_names:
+                    elif isinstance(sheet_to_study, str) and sheet_to_study in sheet_names:
                         chosen_sheet = sheet_to_study
                     else:
-                        print(f"Error: Cannot find worksheet named '{sheet_to_study}'.")
-                        print(f"Available worksheets are: {sheet_names}")
-                        return
+                        print(f"Error: Specified sheet invalid. Defaulting to first sheet.")
+                        chosen_sheet = sheet_names[0]
                 else:
-                    print("Error: Invalid type for sheet_to_study parameter. It should be an integer (index) or a string (name).")
-                    return
-                print(f"Selected worksheet as specified: '{chosen_sheet}'")
-            else:
-                if len(sheet_names) == 1:
                     chosen_sheet = sheet_names[0]
-                    print(f"Automatically selected the only worksheet: '{chosen_sheet}'")
-                else:
-                    print("Multiple worksheets (Sheets) found:")
-                    for i, name in enumerate(sheet_names):
-                        print(f"  {i+1}: {name}")
-                    while True:
-                        try:
-                            choice = int(input(f"Please enter the number of the worksheet you want to study (1-{len(sheet_names)}): "))
-                            if 1 <= choice <= len(sheet_names):
-                                chosen_sheet = sheet_names[choice-1]
-                                break
-                            else:
-                                print("Invalid number, please try again.")
-                        except ValueError:
-                            print("Please enter a number.")
+                
+                all_sheets_data = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
+                df = all_sheets_data[chosen_sheet]
+            else:
+                df = pd.read_csv(file_path, sep='\t', encoding='utf-8')
             
-            all_sheets_data = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
-            df = all_sheets_data[chosen_sheet]
-
             df.columns = df.columns.str.strip()
 
         except BadZipFile:
-            print(f"\nError: The file '{os.path.basename(file_path)}' seems to be corrupted or is not a valid .xlsx file.")
-            print("This usually happens if the file was saved incorrectly or is an old .xls file renamed to .xlsx.")
+            print(f"\nError: Corrupted file. Make sure it is a valid .xlsx file.")
             return
         except Exception as e:
-            print(f"Error reading or selecting worksheet: {e}")
+            print(f"Error reading file: {e}")
             return
 
         if 'Fre' not in df.columns:
@@ -303,41 +365,42 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         else:
             df['Fre'] = pd.to_numeric(df['Fre'], errors='coerce').fillna(0).astype(int)
 
+        if 'History' not in df.columns:
+            df['History'] = ""
+        else:
+            df['History'] = df['History'].fillna("").astype(str).replace('nan', '')
+
         if '单词' not in df.columns and '文法' not in df.columns:
-            print(f"Error: Worksheet '{chosen_sheet}' must contain at least a '单词' or '文法' column.")
+            print(f"Error: The file must contain at least a '单词' or '文法' column.")
             return
             
         has_reading_col = '读音' in df.columns
         has_meaning_col = '含义' in df.columns
         has_remarks_col = '备注' in df.columns
-        if not has_reading_col:
-            print("Info: No '读音' (Reading) column in your Excel. Readings will be auto-generated.")
-        if not has_meaning_col:
-            print("Info: No '含义' (Meaning) column in your Excel, definitions will not be shown.")
-        if not has_remarks_col:
-            print("Info: No '备注' (Remarks) column in your Excel, remarks will not be shown.")
-
-        df.sort_values(by='Fre', ascending=False, inplace=True)
-        print("\nSorted by 'Fre' (Frequency). The most forgotten items will appear first.")
-
-        print("\n--- Japanese Study Helper Started ---")
-        if tts_mode == 'online':
-            print("[TTS Mode]: Online Only")
-        elif tts_mode == 'offline':
-            print("[TTS Mode]: Offline Only")
-        else:
-            print("[TTS Mode]: Auto (Online first, fallback to Offline)")
-            
-        print("[IMPORTANT] Please make sure your input method is in English mode to ensure key presses are registered correctly.")
         
-        is_changed = False
-        last_answered_correctly_index = None
+        is_smart_mode = True 
+
         records = df.to_dict('records')
         original_indices = df.index.tolist()
 
+        zipped = list(zip(records, original_indices))
+        zipped.sort(key=lambda x: calculate_smart_score(x[0].get('Fre', 0), x[0].get('History', '')), reverse=True)
+        records = [x[0] for x in zipped]
+        original_indices = [x[1] for x in zipped]
+
+        print(f"\n--- Japanese Study Helper Started ({'Excel' if file_path.endswith('.xlsx') else 'TXT'} Mode) ---")
+        if tts_mode == 'online': print("[TTS Mode]: Online Only")
+        elif tts_mode == 'offline': print("[TTS Mode]: Offline Only")
+        else: print("[TTS Mode]: Auto")
+            
+        print("[Mode]: Smart Fre Mode (Press 's' to toggle)")
+        print("[IMPORTANT] Please make sure your input method is in English mode.")
+        
+        is_changed = False
+        last_answered_correctly_index = None
+        
         speak_immediate = False 
 
-        # Review queue setup
         session_missed_ids = set()
         session_missed_records = []
         session_missed_original_indices = []
@@ -367,7 +430,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             current_record = records[i]
             original_index = original_indices[i]
 
-            # Trigger bulk review right before the first Fre=0 word
             if not has_done_bulk_review and current_record.get('Fre', 0) == 0:
                 has_done_bulk_review = True
                 if session_missed_records:
@@ -377,7 +439,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         original_indices.insert(i + idx_offset, session_missed_original_indices[idx_offset])
                     session_missed_records.clear()
                     
-                    # Update current pointers after insertion
                     current_record = records[i]
                     original_index = original_indices[i]
 
@@ -391,7 +452,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 try:
                     result = kks.convert(word)
                     reading = "".join([item['hira'] for item in result])
-                except Exception as e:
+                except Exception:
                     pass
 
             meaning = str(current_record.get('含义', '')) if has_meaning_col and pd.notna(current_record.get('含义')) else ""
@@ -406,24 +467,20 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             text_to_speak = word if word else grammar
             
             def speak():
+                if tts_control["stop_requested"]: return
+
                 if tts_mode == 'online':
-                    if not speak_with_gtts(text_to_speak):
-                        print("\n!! Online TTS failed.")
+                    speak_with_gtts(text_to_speak)
                     return
 
                 if tts_mode == 'offline':
                     if japanese_voice_id:
                         speak_with_pyttsx3(japanese_voice_id, text_to_speak)
-                    else:
-                        print("\n!! Offline TTS is not available.")
                     return
                 
                 nonlocal auto_mode_current_engine
                 if auto_mode_current_engine == 'gTTS':
-                    if not speak_with_gtts(text_to_speak):
-                        print("\n!! Online TTS failed, automatically switching to [Offline TTS] mode.")
-                        auto_mode_current_engine = 'pyttsx3'
-                        speak_with_pyttsx3(japanese_voice_id, text_to_speak)
+                    speak_with_gtts(text_to_speak)
                 elif auto_mode_current_engine == 'pyttsx3':
                     speak_with_pyttsx3(japanese_voice_id, text_to_speak)
 
@@ -435,7 +492,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
                 if last_answered_correctly_index is not None:
                     prompt += " / x: Correct Last"
-                prompt += " / L: Toggle TTS / Enter: Privacy Mode)" 
+                prompt += " / s: Toggle Smart Mode / L: Toggle TTS / Enter: Privacy Mode)" 
                 print(prompt + " " + str(i+1) + "/" + str(len(records)), flush=True)
                 
                 if os.name == 'nt':
@@ -452,6 +509,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         elif key_stroke == '0': key = '0'
                         elif key_stroke.lower() == 'x': key = 'x'
                         elif key_stroke.lower() == 'l': key = 'l'
+                        elif key_stroke.lower() == 's': key = 's'
                         else: key = 'unknown'
                     except Exception:
                         key = 'unknown'
@@ -469,33 +527,33 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         speak()
                     continue 
 
+                if key == 's':
+                    is_smart_mode = not is_smart_mode
+                    mode_str = "Smart Fre Mode" if is_smart_mode else "Normal Mode"
+                    print(f"\n[Mode Switched]: {mode_str}")
+                    
+                    sort_start_idx = i + 1 + 5
+                    if sort_start_idx < len(records):
+                        to_sort_recs = records[sort_start_idx:]
+                        to_sort_orig = original_indices[sort_start_idx:]
+                        zipped_rem = list(zip(to_sort_recs, to_sort_orig))
+                        
+                        if is_smart_mode:
+                            zipped_rem.sort(key=lambda x: calculate_smart_score(x[0].get('Fre', 0), x[0].get('History', '')), reverse=True)
+                        else:
+                            zipped_rem.sort(key=lambda x: x[0].get('Fre', 0), reverse=True)
+                        
+                        records[sort_start_idx:] = [x[0] for x in zipped_rem]
+                        original_indices[sort_start_idx:] = [x[1] for x in zipped_rem]
+                        
+                    continue
+
                 if key == 'enter':
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    print("\n" * 10)
-                    
-                    resume_action = None
-                    if os.name == 'nt':
-                        while True:
-                            if msvcrt.kbhit():
-                                key_p = msvcrt.getwch()
-                                if key_p == '\r': 
-                                    resume_action = 'resume'
-                                    break
-                                elif key_p.lower() == 'q':
-                                    resume_action = 'quit'
-                                    break
-                            time.sleep(0.05)
-                    else:
-                        input("Privacy Mode Active. Press [Enter] to resume...")
-                        resume_action = 'resume'
-                    
-                    if resume_action == 'quit':
-                        key = 'q'
-                        break 
-                    
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    display_term(word, grammar)
-                    continue 
+                    should_quit = handle_anti_peeking(word, grammar)
+                    if should_quit:
+                        key = 'q' 
+                        break
+                    continue
                 
                 if key in ['right', '0', 'q', 'x']:
                     break
@@ -510,13 +568,17 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         if original_indices[idx] == last_answered_correctly_index:
                             record['Fre'] += 1
                             
-                            # Track for bulk review
+                            h = str(record.get('History', '')).replace('nan', '')
+                            if h and h[-1] == '1':
+                                record['History'] = h[:-1] + '0'
+                            else:
+                                record['History'] = (h + '0')[-5:]
+                            
                             if id(record) not in session_missed_ids:
                                 session_missed_records.append(record)
                                 session_missed_original_indices.append(last_answered_correctly_index)
                                 session_missed_ids.add(id(record))
 
-                            # Spaced Repetition logic (cap before Fre=0 items)
                             boundary = get_fre0_boundary(i + 1, records)
                             insert_pos = min(i + 5, boundary)
                             records.insert(insert_pos, record)
@@ -536,33 +598,49 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
 
             if key == '0':
                 current_record['Fre'] += 1
+                
+                h = str(current_record.get('History', '')).replace('nan', '')
+                current_record['History'] = (h + "0")[-5:]
+                
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
-                display_details(meaning, display_remarks)
+                display_details(meaning, display_remarks, word)
+                
                 if not speak_immediate:
                     speak() 
                 
-                # Track for bulk review
                 if id(current_record) not in session_missed_ids:
                     session_missed_records.append(current_record)
                     session_missed_original_indices.append(original_index)
                     session_missed_ids.add(id(current_record))
 
-                # Spaced Repetition logic (cap before Fre=0 items)
                 boundary = get_fre0_boundary(i + 1, records)
                 insert_pos = min(i + 5, boundary)
                 records.insert(insert_pos, current_record)
                 original_indices.insert(insert_pos, original_index)
                 print(f"  -> [Spaced Repetition] Will review again shortly (before new words).")
                 
-                time.sleep(2)
+                res = smart_sleep(2.0, word, grammar, meaning, display_remarks)
+                if res == "quit":
+                    print("Saving progress and exiting...")
+                    break
 
             elif key == 'right':
-                display_details(meaning, display_remarks)
+                h = str(current_record.get('History', '')).replace('nan', '')
+                current_record['History'] = (h + "1")[-5:]
+                is_changed = True
+                
+                display_details(meaning, display_remarks, word)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
                 last_answered_correctly_index = original_index
+                
                 if not speak_immediate:
                     speak()
+                
+                res = smart_sleep(0.3, word, grammar, meaning, display_remarks)
+                if res == "quit":
+                    print("Saving progress and exiting...")
+                    break
 
             i += 1
 
@@ -575,7 +653,6 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         try:
             print("Updating records back to DataFrame...")
             
-            # Deduplication
             unique_records = []
             seen_ids = set()
             for rec in records:
@@ -585,33 +662,31 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             
             new_df = pd.DataFrame(unique_records) 
             
-            if 'Fre' in new_df.columns:
-                print("Re-sorting by 'Fre' before saving...")
-                new_df.sort_values(by='Fre', ascending=False, inplace=True)
-
-            all_sheets_data[chosen_sheet] = new_df
-
-            print("Saving file and preserving column widths...")
-            book = load_workbook(file_path)
-            col_widths = {}
-            for sheet_name in book.sheetnames:
-                col_widths[sheet_name] = {
-                    letter: dim.width for letter, dim in book[sheet_name].column_dimensions.items()
-                }
+            if file_path.endswith('.xlsx'):
+                all_sheets_data[chosen_sheet] = new_df
+                
+                print("Saving file and preserving column widths...")
+                book = load_workbook(file_path)
+                col_widths = {}
+                for sheet_name in book.sheetnames:
+                    col_widths[sheet_name] = {
+                        letter: dim.width for letter, dim in book[sheet_name].column_dimensions.items()
+                    }
+                
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    for sheet_name, sheet_data in all_sheets_data.items():
+                        sheet_data.to_excel(writer, sheet_name=sheet_name, index=False)
+                        
+                        if sheet_name in col_widths:
+                            ws = writer.sheets[sheet_name]
+                            for col_letter, width in col_widths[sheet_name].items():
+                                if width:
+                                   ws.column_dimensions[col_letter].width = width
+            else:
+                new_df.to_csv(file_path, sep='\t', encoding='utf-8', index=False)
             
-            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                for sheet_name, sheet_data in all_sheets_data.items():
-                    sheet_data.to_excel(writer, sheet_name=sheet_name, index=False)
-                    
-                    if sheet_name in col_widths:
-                        ws = writer.sheets[sheet_name]
-                        for col_letter, width in col_widths[sheet_name].items():
-                            if width:
-                               ws.column_dimensions[col_letter].width = width
-
-            print("\nStudy session finished! Your progress has been saved successfully, and column widths are preserved.")
-        except PermissionError:
-            print(f"\nError saving file: Permission denied. Please close the Excel file '{file_path}' and try again.")
+            print("\nStudy session finished! Your progress has been saved successfully.")
+        
         except Exception as e:
             print(f"\nAn unknown error occurred while saving the file: {e}")
     finally:
