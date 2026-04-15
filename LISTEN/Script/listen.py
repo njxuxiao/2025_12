@@ -9,7 +9,6 @@ import whisper
 import numpy as np
 import librosa
 import pygame
-from pynput import keyboard
 import torch
 
 def play_audio(segment):
@@ -51,27 +50,59 @@ def apply_speed_change(segment, speed=1.0):
     )
 
 def input_collector(q):
-    def on_press(key):
-        command = None
-        try:
-            if key.char in ['r', 'q', 'a', 's', 'd']:
-                command = {
-                    'r': 'r', 
-                    'q': 'q',
-                    'a': 'speed_down', 
-                    's': 'speed_reset', 
-                    'd': 'speed_up'
-                }[key.char]
-        except AttributeError:
-            if key == keyboard.Key.right: command = 'right'
-            elif key == keyboard.Key.left: command = 'left'
-            elif key == keyboard.Key.space: command = 'toggle_pause'
-            elif key == keyboard.Key.enter: command = 'toggle_privacy'
-        if command:
-            q.put(command)
+    if os.name == 'nt':
+        import msvcrt
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                command = None
+                # 处理普通按键
+                if key in [b'r', b'R']: command = 'r'
+                elif key in [b'q', b'Q']: command = 'q'
+                elif key in [b'a', b'A']: command = 'speed_down'
+                elif key in [b's', b'S']: command = 'speed_reset'
+                elif key in [b'd', b'D']: command = 'speed_up'
+                elif key == b' ': command = 'toggle_pause'
+                elif key == b'\r': command = 'toggle_privacy'
+                # 处理方向键等特殊按键 (Windows下通常以 \xe0 开头)
+                elif key == b'\xe0':  
+                    ext = msvcrt.getch()
+                    if ext == b'M': command = 'right'
+                    elif ext == b'K': command = 'left'
+                
+                if command:
+                    q.put(command)
+            time.sleep(0.05)
+    else:
+        # Mac/Linux 环境的优雅回退方案
+        import sys, tty, termios
+        def getch():
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+                if ch == '\x1b':
+                    ch += sys.stdin.read(2)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            return ch
 
-    with keyboard.Listener(on_press=on_press) as listener:
-        listener.join()
+        while True:
+            key = getch()
+            command = None
+            if key.lower() == 'r': command = 'r'
+            elif key.lower() == 'q': command = 'q'
+            elif key.lower() == 'a': command = 'speed_down'
+            elif key.lower() == 's': command = 'speed_reset'
+            elif key.lower() == 'd': command = 'speed_up'
+            elif key == ' ': command = 'toggle_pause'
+            elif key in ['\r', '\n']: command = 'toggle_privacy'
+            elif key == '\x1b[C': command = 'right'
+            elif key == '\x1b[D': command = 'left'
+            
+            if command:
+                q.put(command)
 
 def run_sentence_playback_mode(sentences_data, repeat_times, command_queue):
     current_sentence_index = 0
@@ -103,7 +134,7 @@ def run_sentence_playback_mode(sentences_data, repeat_times, command_queue):
             print("="*50)
         else:
             os.system('cls' if os.name == 'nt' else 'clear')
-            print("\n[ Privacy Mode Enabled - Press Enter to restore UI ]")
+            print("\n[ --- ]")
 
         playback_interrupted = False
         for i in range(repeat_times):
@@ -119,7 +150,7 @@ def run_sentence_playback_mode(sentences_data, repeat_times, command_queue):
                         privacy_mode = not privacy_mode
                         if privacy_mode:
                             os.system('cls' if os.name == 'nt' else 'clear')
-                            print("\n[ Privacy Mode Enabled - Press Enter to restore UI ]")
+                            print("\n[ --- ]")
                         else:
                             os.system('cls' if os.name == 'nt' else 'clear')
                             print("\n" + "="*50)
@@ -203,7 +234,7 @@ def run_continuous_mode(filepath, sentences_data, command_queue):
                 privacy_mode = not privacy_mode
                 if privacy_mode:
                     os.system('cls' if os.name == 'nt' else 'clear')
-                    print("\n[ Privacy Mode Enabled - Press Enter to restore UI ]")
+                    print("\n[ --- ]")
                 else:
                     header_needs_update = True
                     current_sentence_index = -1 
