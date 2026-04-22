@@ -262,23 +262,45 @@ def handle_anti_peeking(word, grammar, extra_ui_callback=None):
 
     os.system('cls' if os.name == 'nt' else 'clear')
     
-    print("Screen cleared. Press Enter again to resume, or 'q' to quit.")
+    print("[---------------------------------------------------------------]")
     
-    while keyboard.is_pressed('enter'):
-        time.sleep(0.05)
+    time.sleep(0.3)
+    
+    break_action = False
+    
+    if os.name == 'nt':
+        while msvcrt.kbhit():
+            msvcrt.getwch()
+        while True:
+            key_p = msvcrt.getwch()
+            if key_p == '\r':
+                break_action = False
+                break
+            elif key_p.lower() == 'q':
+                break_action = True
+                break
+    else:
+        while keyboard.is_pressed('enter'):
+            time.sleep(0.05)
+        while True:
+            event = keyboard.read_event(suppress=False)
+            if event.event_type == keyboard.KEY_DOWN:
+                if event.name.lower() == 'enter':
+                    break_action = False
+                    break
+                elif event.name.lower() == 'q':
+                    break_action = True
+                    break
 
-    while True:
-        event = keyboard.read_event(suppress=True)
-        if event.event_type == keyboard.KEY_DOWN:
-            if event.name.lower() == 'enter':
-                tts_control["stop_requested"] = False
-                os.system('cls' if os.name == 'nt' else 'clear')
-                display_term(word, grammar)
-                if extra_ui_callback:
-                    extra_ui_callback()
-                return False
-            elif event.name.lower() == 'q':
-                return True
+    tts_control["stop_requested"] = False
+    
+    if not break_action:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        display_term(word, grammar)
+        if extra_ui_callback:
+            extra_ui_callback()
+            
+    return break_action
 
 def smart_sleep(seconds, word, grammar, meaning=None, remarks=None, display_remarks=None):
     start_time = time.time()
@@ -397,10 +419,12 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
         print("[IMPORTANT] Please make sure your input method is in English mode.")
         
         is_changed = False
+        exited_early = False
         last_answered_correctly_index = None
         
         speak_immediate = False 
 
+        session_history_updated_ids = set()
         session_missed_ids = set()
         session_missed_records = []
         session_missed_original_indices = []
@@ -559,7 +583,8 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     break
             
             if key == 'q':
-                print("Saving progress and exiting...")
+                print("Saving progress and exiting early...")
+                exited_early = True
                 break 
             
             if key == 'x':
@@ -571,7 +596,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                             h = str(record.get('History', '')).replace('nan', '')
                             if h and h[-1] == '1':
                                 record['History'] = h[:-1] + '0'
-                            else:
+                            elif not h or h[-1] != '0':
                                 record['History'] = (h + '0')[-5:]
                             
                             if id(record) not in session_missed_ids:
@@ -599,8 +624,10 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             if key == '0':
                 current_record['Fre'] += 1
                 
-                h = str(current_record.get('History', '')).replace('nan', '')
-                current_record['History'] = (h + "0")[-5:]
+                if id(current_record) not in session_history_updated_ids:
+                    h = str(current_record.get('History', '')).replace('nan', '')
+                    current_record['History'] = (h + "0")[-5:]
+                    session_history_updated_ids.add(id(current_record))
                 
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
@@ -622,12 +649,16 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 
                 res = smart_sleep(2.0, word, grammar, meaning, display_remarks)
                 if res == "quit":
-                    print("Saving progress and exiting...")
+                    print("Saving progress and exiting early...")
+                    exited_early = True
                     break
 
             elif key == 'right':
-                h = str(current_record.get('History', '')).replace('nan', '')
-                current_record['History'] = (h + "1")[-5:]
+                if id(current_record) not in session_history_updated_ids:
+                    h = str(current_record.get('History', '')).replace('nan', '')
+                    current_record['History'] = (h + "1")[-5:]
+                    session_history_updated_ids.add(id(current_record))
+                    
                 is_changed = True
                 
                 display_details(meaning, display_remarks, word)
@@ -639,12 +670,16 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 
                 res = smart_sleep(0.3, word, grammar, meaning, display_remarks)
                 if res == "quit":
-                    print("Saving progress and exiting...")
+                    print("Saving progress and exiting early...")
+                    exited_early = True
                     break
 
             i += 1
 
-        print("\nAll words/grammar have been studied!")
+        if not exited_early:
+            print("\nAll words/grammar have been studied!")
+        else:
+            print("\nSession ended early.")
 
         if not is_changed:
             print("\nNo changes were made, no need to save.")
@@ -707,7 +742,7 @@ if __name__ == '__main__':
                   "17_25_07.xlsx", "18_25_12"]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[8]
+    excel_file_path = excel_list[4 - 1]
     
     study_sheet = 0
 
