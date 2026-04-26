@@ -631,7 +631,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
-                display_details(meaning, display_remarks, word)
+                display_details(meaning, display_remarks, word if word else grammar)
                 
                 if not speak_immediate:
                     speak() 
@@ -661,7 +661,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     
                 is_changed = True
                 
-                display_details(meaning, display_remarks, word)
+                display_details(meaning, display_remarks, word if word else grammar)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
                 last_answered_correctly_index = original_index
                 
@@ -732,12 +732,16 @@ if __name__ == '__main__':
     
     excel_list = ["1_21_07.xlsx", "2_22_12.xlsx", 
                   "3_22_07.xlsx", "4_21_12.xlsx",
+
                   "5_20_12.xlsx", "6_19_12.xlsx",
                   "7_19_07.xlsx", "8_18_12.xlsx",
+
                   "9_18_07.xlsx", "10_17_12.xlsx",
                   "11_17_07.xlsx", "12_16_12.xlsx",
+
                   "13_23_07",      "14_23_12",
                   "15_24_12",      "16_24_12.xlsx",
+
                   "17_25_07.xlsx", "18_25_12"]
 
     # Note: Ensure this file exists or change to your filename

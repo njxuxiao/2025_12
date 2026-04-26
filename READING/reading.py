@@ -631,7 +631,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                 
                 is_changed = True
                 print(f"Recorded! Forgotten count: {current_record['Fre']}")
-                display_details(meaning, display_remarks, word)
+                display_details(meaning, display_remarks, word if word else grammar)
                 
                 if not speak_immediate:
                     speak() 
@@ -661,7 +661,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     
                 is_changed = True
                 
-                display_details(meaning, display_remarks, word)
+                display_details(meaning, display_remarks, word if word else grammar)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
                 last_answered_correctly_index = original_index
                 
