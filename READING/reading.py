@@ -262,7 +262,7 @@ def handle_anti_peeking(word, grammar, extra_ui_callback=None):
 
     os.system('cls' if os.name == 'nt' else 'clear')
     
-    print("[---------------------------------------------------------------]")
+    print("[]")
     
     time.sleep(0.3)
     

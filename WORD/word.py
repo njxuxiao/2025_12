@@ -262,7 +262,7 @@ def handle_anti_peeking(word, grammar, extra_ui_callback=None):
 
     os.system('cls' if os.name == 'nt' else 'clear')
     
-    print("[---------------------------------------------------------------]")
+    print("[]")
     
     time.sleep(0.3)
     
@@ -739,12 +739,13 @@ if __name__ == '__main__':
                   "11_17_07",     "12_16_12",
                   "13_23_07",      "14_23_12",
                   "15_24_12",      "16_24_12.xlsx",
-                  "17_25_07.xlsx", "18_25_12"]
+                  "17_25_07.xlsx", "18_25_12",
+                  "hongN3.xlsx"]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[4 - 1]
+    excel_file_path = excel_list[19 - 1]
     
-    study_sheet = 0
+    study_sheet =2
 
     preferred_tts_engine = 'auto' 
 
