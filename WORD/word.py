@@ -743,9 +743,9 @@ if __name__ == '__main__':
                   "hongN3.xlsx"]
 
     # Note: Ensure this file exists or change to your filename
-    excel_file_path = excel_list[19 - 1]
+    excel_file_path = excel_list[2 - 1]
     
-    study_sheet =2
+    study_sheet =0
 
     preferred_tts_engine = 'auto' 
 
