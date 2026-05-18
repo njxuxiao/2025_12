@@ -413,7 +413,7 @@ def sentence_listening_practice(filepath, repeat_times=3, whisper_model="base"):
         pygame.quit()
 
 if __name__ == '__main__':
-    audio_file = './22_12/1_1.mp3'
+    audio_file = './22_12/1_5.mp3'
     sentence_listening_practice(
         filepath=audio_file, 
         repeat_times=1,  
