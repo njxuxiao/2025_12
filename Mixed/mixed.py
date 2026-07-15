@@ -515,7 +515,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
             while True:
                 prompt = "Press a key... (→: Know / 0: Don't Know / q: Quit"
                 if last_answered_correctly_index is not None:
-                    prompt += " / x: Correct Last"
+                    prompt += " / x: Correct Last / g: Master Last"
                 prompt += " / s: Toggle Smart Mode / L: Toggle TTS / Enter: Privacy Mode)" 
                 print(prompt + " " + str(i+1) + "/" + str(len(records)), flush=True)
                 
@@ -534,6 +534,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         elif key_stroke.lower() == 'x': key = 'x'
                         elif key_stroke.lower() == 'l': key = 'l'
                         elif key_stroke.lower() == 's': key = 's'
+                        elif key_stroke.lower() == 'g': key = 'g'
                         else: key = 'unknown'
                     except Exception:
                         key = 'unknown'
@@ -579,7 +580,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                         break
                     continue
                 
-                if key in ['right', '0', 'q', 'x']:
+                if key in ['right', '0', 'q', 'x', 'g']:
                     break
             
             if key == 'q':
@@ -616,6 +617,19 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     last_answered_correctly_index = None
                 else:
                     print("\nThere is no previous item to correct.")
+                continue
+
+            if key == 'g':
+                if last_answered_correctly_index is not None:
+                    for idx, record in enumerate(records):
+                        if original_indices[idx] == last_answered_correctly_index:
+                            record['Fre'] = 0
+                            break
+                    is_changed = True
+                    print(f"\nMastered the previous item! Forgotten count reset to 0.")
+                    last_answered_correctly_index = None
+                else:
+                    print("\nThere is no previous item to master.")
                 continue
 
             last_answered_correctly_index = None
@@ -661,7 +675,7 @@ def study_helper(file_path, sheet_to_study=None, tts_mode='auto'):
                     
                 is_changed = True
                 
-                display_details(meaning, display_remarks, word if word else grammar)
+                display_details(meaning, display_remarks, word)
                 print(f"Great! Forgotten count: {current_record['Fre']}")
                 last_answered_correctly_index = original_index
                 
