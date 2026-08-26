@@ -1,7 +1,7 @@
 import os
 import sys
-import time
 import re
+import shutil  # Added to dynamically get terminal width
 
 # ================= Dependency Check =================
 try:
@@ -15,43 +15,6 @@ try:
 except ImportError:
     print("Error: 'keyboard' library is missing. (pip install keyboard)")
     sys.exit()
-
-try:
-    import argostranslate.package
-    import argostranslate.translate
-except ImportError:
-    print("Error: 'argostranslate' library is missing.")
-    print("Please run in terminal: pip install argostranslate")
-    sys.exit()
-
-# ================= Offline Translation Model Initialization =================
-def ensure_offline_translation_models():
-    """Check and download language packages for offline translation (requires internet only for the first run)"""
-    try:
-        installed = argostranslate.package.get_installed_packages()
-        installed_codes = [(pkg.from_code, pkg.to_code) for pkg in installed]
-        
-        # argostranslate translates via English as an intermediate language
-        needed_paths = [('ja', 'en'), ('en', 'zh')]
-        missing = [p for p in needed_paths if p not in installed_codes]
-        
-        if missing:
-            print("First time using offline translation, downloading local language packages (requires brief internet connection, may take a few minutes)...")
-            argostranslate.package.update_package_index()
-            available = argostranslate.package.get_available_packages()
-            
-            for p in missing:
-                for pkg in available:
-                    if pkg.from_code == p[0] and pkg.to_code == p[1]:
-                        print(f"Downloading {p[0]} -> {p[1]} language package...")
-                        argostranslate.package.install_from_path(pkg.download())
-                        break
-            print("Offline translation model configuration complete! Future translations will run completely offline.\n")
-            time.sleep(2)
-    except Exception as e:
-        print(f"Offline language package initialization failed: {e}")
-        print("Please check your network and try again, or ensure you have enough disk space.")
-        sys.exit()
 
 # ================= UI & Formatting Module =================
 def get_display_length(s):
@@ -84,7 +47,7 @@ def wrap_text(text, max_width):
         lines.append(current_line)
     return lines
 
-def display_box(title, text, width=60, border_style='double'):
+def display_box(title, text, width=80, border_style='double'):
     """Draw a console text box"""
     if border_style == 'double':
         top_l, top_r, bot_l, bot_r, h_line, v_line = "╔", "╗", "╚", "╝", "═", "║"
@@ -95,12 +58,15 @@ def display_box(title, text, width=60, border_style='double'):
     
     title_line = f" [{title}] "
     title_pad = width - get_display_length(title_line)
+    # Ensure title padding doesn't go negative
+    title_pad = max(0, title_pad)
     print(v_line + title_line + " " * title_pad + v_line)
     print(v_line + " " * width + v_line)
 
     lines = wrap_text(text, width - 4)
     for line in lines:
         padding = width - 4 - get_display_length(line)
+        padding = max(0, padding)
         print(v_line + "  " + line + " " * padding + "  " + v_line)
         
     print(v_line + " " * width + v_line)
@@ -123,8 +89,8 @@ def wait_for_key():
                 if key_stroke == 'M': return 'right'
                 elif key_stroke == 'K': return 'left'
             elif key_stroke.lower() == 'q': return 'q'
-            elif key_stroke.lower() == 't': return 't'
-            elif key_stroke in ['\r', '\n']: return 'enter' # Boss Key triggers on Enter
+            elif key_stroke.lower() == 'j': return 'j'
+            elif key_stroke in ['\r', '\n']: return 'enter' 
     else:
         while True:
             event = keyboard.read_event(suppress=True)
@@ -132,7 +98,7 @@ def wait_for_key():
                 name = event.name.lower()
                 if name == 'right': return 'right'
                 elif name == 'left': return 'left'
-                elif name in ['q', 't', 'enter']: return name
+                elif name in ['q', 'j', 'enter']: return name
 
 def read_article(file_path):
     try:
@@ -148,12 +114,7 @@ def read_article(file_path):
             print("The article is empty or no valid sentences were recognized.")
             return
 
-        # Check offline models
-        ensure_offline_translation_models()
-
         idx = 0
-        show_translation = False
-        translation_cache = {}
 
         while idx < len(sentences):
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -161,48 +122,52 @@ def read_article(file_path):
 
             print("--- Immersive Japanese Reader ---")
             
-            # Display original Japanese text with Progress Tracking
             progress_title = f"Original Text [{idx + 1}/{len(sentences)}]"
-            display_box(progress_title, current_sentence, width=70, border_style='double')
+            
+            # ==== Dynamic Width Calculation ====
+            # Get actual terminal window width (default to 120 if undetectable)
+            term_width = shutil.get_terminal_size((120, 24)).columns
+            
+            # Calculate how much width the sentence actually needs (+8 for padding and borders)
+            needed_width = get_display_length(current_sentence) + 8
+            
+            # Set minimum width to 80, but expand if the sentence is longer
+            dynamic_width = max(80, needed_width)
+            
+            # Cap the maximum width to fit strictly inside the terminal window to prevent ugly line breaks
+            final_width = min(dynamic_width, term_width - 2)
 
-            # Display translation
-            if show_translation:
-                print(" Translating offline...\r", end="")
-                if idx not in translation_cache:
-                    try:
-                        # Call offline translation engine
-                        translation_cache[idx] = argostranslate.translate.translate(current_sentence, 'ja', 'zh')
-                    except Exception:
-                        translation_cache[idx] = f"[Translation Failed: Offline translation engine error or model not loaded correctly]"
-                
-                print(" " * 25 + "\r", end="") # Clear 'translating' prompt
-                display_box("Chinese Translation", translation_cache[idx], width=70, border_style='single')
+            # Display original Japanese text with Progress Tracking
+            display_box(progress_title, current_sentence, width=final_width, border_style='double')
 
-            # # Operation prompt
-            # print("\n" + "="*70)
-            # print(f"Controls: [→] Next | [←] Prev | [T] Translate Current")
-            # print(f"          [Enter] Boss Key (Clear Screen) | [Q] Quit")
+            # Operation prompt
+            print("\n" + "="*70)
+            print(f"Controls: [→] Next | [←] Prev | [J] Jump")
+            print(f"          [Enter] Boss Key (Clear Screen) | [Q] Quit")
             
             key = wait_for_key()
 
             if key == 'right':
                 idx += 1
-                show_translation = False
             elif key == 'left':
                 idx = max(0, idx - 1)
-                show_translation = False
-            elif key == 't':
-                show_translation = True
+            elif key == 'j':
+                # ==== Jump Logic ====
+                print("\n[Jump Mode]", end="")
+                try:
+                    jump_input = input(f" Enter sentence number (1-{len(sentences)}): ")
+                    if jump_input.strip(): 
+                        jump_idx = int(jump_input.strip()) - 1
+                        if 0 <= jump_idx < len(sentences):
+                            idx = jump_idx
+                except ValueError:
+                    pass
             elif key == 'enter':
                 # ==== Boss Key (Anti-peeping) Logic ====
                 os.system('cls' if os.name == 'nt' else 'clear')
-                # Fake a minimalist system command line interface
                 fake_prompt = f"{os.getcwd()}>" if os.name == 'nt' else f"{os.environ.get('USER', 'user')}@localhost:~$"
                 print(fake_prompt, end="", flush=True)
-                # Wait for any valid key (right, left, t, q, or enter) to restore
                 wait_for_key()
-                # Hide translation upon restoration for better anti-peeping
-                show_translation = False 
             elif key == 'q':
                 print("\nReading ended.")
                 break
@@ -212,7 +177,5 @@ def read_article(file_path):
 
 if __name__ == '__main__':
     # Replace the txt file path here with your Japanese article file path
-    article_file = "1.txt"
+    article_file = r"D:\N2_2025_12\QUORA\1.txt"
     read_article(article_file)
-    for i in range(10):
-        print("\n" * 5)
